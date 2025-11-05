@@ -1,4 +1,4 @@
-# Cineshelf - Quick Start Guide
+# Cinefile - Quick Start Guide
 
 ## 🚀 Get Running in 5 Minutes
 
@@ -103,7 +103,7 @@ npm run migrate:latest
 ## 📚 File Structure
 
 ```
-cineshelf/
+cinefile/
 ├── server/
 │   ├── src/
 │   │   ├── routes/          # API endpoints

@@ -34,7 +34,7 @@ app.use('/uploads', express.static(uploadDir));
 
 // API Routes
 app.get('/api', (req, res) => {
-  res.json({ message: 'Hello World from Cineshelf API! (Full Mode)' });
+  res.json({ message: 'Hello World from Cinefile API! (Full Mode)' });
 });
 
 app.get('/api/health', (req, res) => {
@@ -68,7 +68,9 @@ app.get('*', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🎬 Cineshelf server running on port ${PORT} (Full Mode)`);
+  console.log(`🎬 Cinefile server running on port ${PORT} (Full Mode)`);
   console.log(`📱 API available at http://localhost:${PORT}/api`);
 });
+
+
 

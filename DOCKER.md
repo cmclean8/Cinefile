@@ -1,8 +1,8 @@
-# Cineshelf - Docker Deployment Guide
+# Cinefile - Docker Deployment Guide
 
 ## 🐳 Quick Start
 
-Deploy Cineshelf with Docker in 3 simple steps:
+Deploy Cinefile with Docker in 3 simple steps:
 
 ```bash
 # 1. Copy and configure environment variables
@@ -20,7 +20,7 @@ That's it! The application is now running as a **single lightweight container** 
 
 ## 🏠 Why Single Container?
 
-Cineshelf uses a simplified **single-container architecture** perfect for homelab use:
+Cinefile uses a simplified **single-container architecture** perfect for homelab use:
 
 - ✅ **Simple**: One container to manage instead of two
 - ✅ **Lightweight**: ~100MB RAM usage, ~150MB disk space
@@ -90,7 +90,7 @@ Check if container is running:
 docker-compose ps
 ```
 
-You should see `cineshelf` running and healthy.
+You should see `cinefile` running and healthy.
 
 View logs:
 ```bash
@@ -99,18 +99,26 @@ docker-compose logs -f
 
 Or using Docker directly:
 ```bash
-docker logs -f cineshelf
+docker logs -f cinefile
 ```
 
 ### 5. Access the Application
 
-Everything runs on a single port (3000):
+The application runs two server instances in the same container:
 
+**Port 3000 (Read-Only - Public)**:
 - **Frontend**: http://localhost:3000
-- **Admin Panel**: http://localhost:3000/admin
 - **Collection**: http://localhost:3000/collection
-- **API**: http://localhost:3000/api
+- **API**: http://localhost:3000/api (read-only endpoints only)
 - **Health Check**: http://localhost:3000/api/health
+
+**Port 3001 (Full API - Admin)**:
+- **Frontend**: http://localhost:3001
+- **Admin Panel**: http://localhost:3001/admin
+- **API**: http://localhost:3001/api (all endpoints including write operations)
+- **Health Check**: http://localhost:3001/api/health
+
+> **Security Note**: By default, only port 3000 is exposed in `docker-compose.yml`. Port 3001 should only be exposed via VPN or internal network access.
 
 ## 🔧 Common Operations
 
@@ -151,22 +159,22 @@ docker-compose logs -f
 
 ```bash
 # Access container shell
-docker-compose exec cineshelf sh
+docker-compose exec cinefile sh
 
 # Or using Docker directly
-docker exec -it cineshelf sh
+docker exec -it cinefile sh
 
 # Run database migrations manually
-docker-compose exec cineshelf npm run migrate:latest
+docker-compose exec cinefile npm run migrate:latest
 ```
 
 ## 💾 Data Persistence
 
 ### Understanding Volumes
 
-Cineshelf uses a named Docker volume to persist data:
+Cinefile uses a named Docker volume to persist data:
 
-- **Volume Name**: `cineshelf_data`
+- **Volume Name**: `cinefile_data`
 - **Mounted at**: `/data` inside the container
 - **Contains**: 
   - SQLite database (`database.sqlite`)
@@ -182,7 +190,7 @@ Create a backup:
 mkdir -p backups
 
 # Copy database from container
-docker cp cineshelf:/data/database.sqlite backups/database-$(date +%Y%m%d-%H%M%S).sqlite
+docker cp cinefile:/data/database.sqlite backups/database-$(date +%Y%m%d-%H%M%S).sqlite
 ```
 
 ### Restore Database
@@ -193,13 +201,13 @@ Restore from backup:
 docker-compose down
 
 # Remove existing volume
-docker volume rm cineshelf_data
+docker volume rm cinefile_data
 
 # Start the application
 docker-compose --env-file .env.docker up -d
 
 # Wait for container to be ready, then restore
-docker cp backups/your-backup.sqlite cineshelf:/data/database.sqlite
+docker cp backups/your-backup.sqlite cinefile:/data/database.sqlite
 
 # Restart container
 docker-compose restart
@@ -209,7 +217,7 @@ docker-compose restart
 
 ```bash
 # Create backup of uploads directory
-docker cp cineshelf:/data/uploads backups/uploads-$(date +%Y%m%d-%H%M%S)
+docker cp cinefile:/data/uploads backups/uploads-$(date +%Y%m%d-%H%M%S)
 ```
 
 ### Export All Data
@@ -217,7 +225,7 @@ docker cp cineshelf:/data/uploads backups/uploads-$(date +%Y%m%d-%H%M%S)
 ```bash
 # Export entire data volume
 docker run --rm \
-  -v cineshelf_data:/data \
+  -v cinefile_data:/data \
   -v $(pwd)/backups:/backup \
   alpine tar czf /backup/data-backup-$(date +%Y%m%d-%H%M%S).tar.gz -C /data .
 ```
@@ -227,7 +235,7 @@ docker run --rm \
 ```bash
 # Import data volume backup
 docker run --rm \
-  -v cineshelf_data:/data \
+  -v cinefile_data:/data \
   -v $(pwd)/backups:/backup \
   alpine tar xzf /backup/your-backup.tar.gz -C /data
 ```
@@ -240,7 +248,7 @@ docker run --rm \
 ```bash
 docker-compose logs
 # Or
-docker logs cineshelf
+docker logs cinefile
 ```
 
 **Common issues:**
@@ -261,7 +269,7 @@ docker logs cineshelf
    ```bash
    # Reset permissions
    docker-compose down
-   docker volume rm cineshelf_data
+   docker volume rm cinefile_data
    docker-compose --env-file .env.docker up -d
    ```
 
@@ -269,13 +277,13 @@ docker logs cineshelf
 
 ```bash
 # Check if database file exists
-docker exec cineshelf ls -la /data/
+docker exec cinefile ls -la /data/
 
 # Run migrations manually
-docker exec cineshelf npm run migrate:latest
+docker exec cinefile npm run migrate:latest
 
 # Check migration status
-docker exec cineshelf npx knex migrate:currentVersion
+docker exec cinefile npx knex migrate:currentVersion
 ```
 
 ### TMDb API Not Working
@@ -283,7 +291,7 @@ docker exec cineshelf npx knex migrate:currentVersion
 1. Verify API key in `.env.docker`
 2. Check logs for API errors:
    ```bash
-   docker logs cineshelf | grep -i tmdb
+   docker logs cinefile | grep -i tmdb
    ```
 3. Test API key manually:
    ```bash
@@ -302,7 +310,7 @@ docker exec cineshelf npx knex migrate:currentVersion
 
 1. Check if uploads directory exists:
    ```bash
-   docker exec cineshelf ls -la /data/uploads/
+   docker exec cinefile ls -la /data/uploads/
    ```
 
 2. Verify Express is serving uploads:
@@ -312,7 +320,7 @@ docker exec cineshelf npx knex migrate:currentVersion
 
 3. Check permissions:
    ```bash
-   docker exec cineshelf ls -la /data/
+   docker exec cinefile ls -la /data/
    ```
 
 ### Container Health Check Failing
@@ -326,6 +334,38 @@ curl http://localhost:3000/api/health
 ```
 
 ## 🏭 Production Deployment
+
+### Two-Port Security Architecture
+
+Cinefile uses a **two-port architecture** running in a single container:
+
+- **Port 3000 (Read-Only)**: Public-facing server
+  - Only GET endpoints are available
+  - Safe to expose to the internet
+  - Frontend and collection browsing functionality
+  
+- **Port 3001 (Full API)**: Admin server
+  - All CRUD operations available
+  - Frontend with admin panel functionality
+  - Should only be accessible via VPN or internal network
+
+**Benefits**:
+- Defense in depth: Even if authentication is bypassed on port 3000, write operations aren't available
+- Simple deployment: Both servers share the same database and uploads directory
+- Flexible access: Public users use port 3000, admins use port 3001 via secure network
+
+**Port Configuration**:
+By default, `docker-compose.yml` only exposes port 3000 publicly. To expose port 3001 for admin access:
+```yaml
+ports:
+  - "${READ_ONLY_PORT:-3000}:3000"
+  - "${ADMIN_PORT:-3001}:3001"  # Only expose via VPN/internal network
+```
+
+**Important**: If you expose port 3001 to the internet, ensure you have:
+- Strong firewall rules
+- VPN access only
+- Or use a reverse proxy with IP allowlisting
 
 ### Security Considerations
 
@@ -343,9 +383,10 @@ curl http://localhost:3000/api/health
    - Consider implementing JWT tokens
 
 4. **Network security**:
-   - Don't expose port 3001 directly
+   - **Restrict port 3001**: Only expose via VPN or internal network
+   - Use firewall rules to block port 3001 from public internet
    - Use docker network isolation
-   - Implement rate limiting
+   - Implement rate limiting on port 3000
 
 ### Performance Tuning
 
@@ -377,7 +418,7 @@ curl http://localhost:3000/api/health
 
 2. **Container stats**:
    ```bash
-   docker stats cineshelf-server cineshelf-client
+   docker stats cinefile-server cinefile-client
    ```
 
 3. **Health checks**:
@@ -438,7 +479,7 @@ docker ps -a
 docker volume ls
 
 # Inspect volume
-docker volume inspect cineshelf_server_data
+docker volume inspect cinefile_server_data
 
 # View networks
 docker network ls
@@ -450,8 +491,8 @@ docker system prune -a
 docker images
 
 # Remove specific image
-docker rmi cineshelf-server
-docker rmi cineshelf-client
+docker rmi cinefile-server
+docker rmi cinefile-client
 
 # Follow logs for specific service
 docker-compose logs -f server
@@ -469,7 +510,7 @@ If you encounter issues:
 
 1. Check logs: `docker-compose logs -f`
 2. Verify environment: `cat .env.docker`
-3. Check volumes: `docker volume inspect cineshelf_server_data`
+3. Check volumes: `docker volume inspect cinefile_server_data`
 4. Review documentation: `README.md`, `SETUP.md`
 5. Test health: `curl http://localhost:3000/api/health`
 
@@ -478,7 +519,7 @@ If you encounter issues:
 - [Docker Documentation](https://docs.docker.com/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 - [TMDb API Documentation](https://developers.themoviedb.org/3)
-- [Cineshelf GitHub Repository](https://github.com/yourusername/cineshelf)
+- [Cinefile GitHub Repository](https://github.com/yourusername/cinefile)
 
 ---
 

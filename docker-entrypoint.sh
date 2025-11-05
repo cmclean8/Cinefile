@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "🎬 Cineshelf - Starting..."
+echo "🎬 Cinefile - Starting..."
 echo "==========================="
 
 # Ensure data directories exist
@@ -39,7 +39,7 @@ else
 fi
 
 echo ""
-echo "🚀 Starting Cineshelf servers..."
+echo "🚀 Starting Cinefile servers..."
 echo "=================================="
 echo "📡 Read-Only Server (Public):"
 echo "   - Container port: 3000"

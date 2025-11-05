@@ -8,7 +8,7 @@ const router = Router();
  */
 router.get('/schema', (req: Request, res: Response) => {
   const schema = {
-    description: 'CSV Import/Export Schema for Cineshelf Media Collection',
+    description: 'CSV Import/Export Schema for Cinefile Media Collection',
     format: 'CSV (Comma-Separated Values)',
     encoding: 'UTF-8',
     fields: [
@@ -134,4 +134,6 @@ router.get('/schema', (req: Request, res: Response) => {
 });
 
 export default router;
+
+
 

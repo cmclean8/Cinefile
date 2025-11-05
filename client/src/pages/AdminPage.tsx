@@ -141,7 +141,7 @@ const AdminPage: React.FC = () => {
       const link = document.createElement('a');
       link.href = url;
       const timestamp = new Date().toISOString().split('T')[0];
-      link.download = `cineshelf-export-${timestamp}.csv`;
+      link.download = `cinefile-export-${timestamp}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -230,8 +230,8 @@ const AdminPage: React.FC = () => {
           <div className="card">
             <div className="text-center mb-6">
               <div className="flex flex-col items-center mb-4">
-                <img src="/icon-32.png" alt="Cineshelf" className="w-20 h-20 mb-4 dark:hidden" />
-                <img src="/icon-32-dark.png" alt="Cineshelf" className="w-20 h-20 mb-4 hidden dark:block" />
+                <img src="/icon-32.png" alt="Cinefile" className="w-20 h-20 mb-4 dark:hidden" />
+                <img src="/icon-32-dark.png" alt="Cinefile" className="w-20 h-20 mb-4 hidden dark:block" />
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Admin Login</h1>
                 <p className="text-gray-600 dark:text-gray-300">Enter your admin password to continue</p>
               </div>

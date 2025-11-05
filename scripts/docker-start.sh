@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Cineshelf - Docker Start Script
+# Cinefile - Docker Start Script
 # Starts the application with docker-compose
 
 set -e
 
-echo "🎬 Cineshelf - Starting Application"
+echo "🎬 Cinefile - Starting Application"
 echo "====================================="
 
 # Check if Docker is installed
@@ -44,7 +44,7 @@ if [ ! -f .env.docker ]; then
 fi
 
 # Check if images exist
-if ! docker images | grep -q "cineshelf"; then
+if ! docker images | grep -q "cinefile"; then
     echo "📦 Images not found. Building..."
     docker-compose build
 fi
@@ -62,7 +62,7 @@ echo ""
 docker-compose ps
 
 echo ""
-echo "✅ Cineshelf is running!"
+echo "✅ Cinefile is running!"
 echo ""
 echo "📱 Access the application:"
 echo "   Frontend: http://localhost:3000"

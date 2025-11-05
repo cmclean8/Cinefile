@@ -50,8 +50,8 @@ const DynamicFavicon: React.FC = () => {
       if (manifestLink) {
         // Create a new manifest with theme-appropriate icons
         const manifest = {
-          name: "Cineshelf",
-          short_name: "Cineshelf",
+          name: "Cinefile",
+          short_name: "Cinefile",
           description: "Your Physical Media Collection Manager",
           start_url: "/",
           display: "standalone",

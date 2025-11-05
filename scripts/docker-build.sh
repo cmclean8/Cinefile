@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Cineshelf - Docker Build Script
+# Cinefile - Docker Build Script
 # Builds the unified Docker image
 
 set -e
 
-echo "🎬 Cineshelf - Building Docker Image"
+echo "🎬 Cinefile - Building Docker Image"
 echo "======================================"
 
 # Check if Docker is installed
@@ -31,11 +31,11 @@ echo ""
 echo "✅ Build complete!"
 echo ""
 echo "Image created:"
-docker images | grep -E "cineshelf|REPOSITORY"
+docker images | grep -E "cinefile|REPOSITORY"
 
 echo ""
 echo "📊 Image size:"
-docker images cineshelf --format "{{.Size}}"
+docker images cinefile --format "{{.Size}}"
 
 echo ""
 echo "To start the application, run:"

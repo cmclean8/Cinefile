@@ -1,4 +1,4 @@
-# Cineshelf 🎬
+# Cinefile 🎬
 
 A simple, clean, and modern self-hosted web application for cataloging and displaying your personal collection of physical video media (Blu-rays, 4K UHDs, DVDs, LaserDiscs, and VHS).
 
@@ -48,7 +48,7 @@ A simple, clean, and modern self-hosted web application for cataloging and displ
 
 ### Two-Port Architecture
 
-Cineshelf runs two servers in one container:
+Cinefile runs two servers in one container:
 
 - **Read-Only Port** (default 3000): Public-facing server with collection viewing only
 - **Admin Port** (default 3001): Full API with all CRUD operations - keep this restricted to VPN/internal network

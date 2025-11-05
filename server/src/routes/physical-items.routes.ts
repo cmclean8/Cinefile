@@ -808,11 +808,12 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
 
           const [physicalItemId] = await trx('physical_items').insert(physicalItemData);
 
-          // Link physical item to media
+          // Link physical item to media with formats
           await trx('physical_item_media').insert({
             physical_item_id: physicalItemId,
             media_id: mediaId,
             disc_number: item.media.disc_number,
+            formats: JSON.stringify(formatArray),
           });
 
           // Fetch created item with media

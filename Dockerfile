@@ -84,16 +84,18 @@ RUN chmod +x docker-entrypoint.sh
 # Switch to non-root user
 USER nodejs
 
-# Expose single port
-EXPOSE 3000
+# Expose both ports
+EXPOSE 3000 3001
 
 # Environment defaults
 ENV NODE_ENV=production \
     PORT=3000 \
+    READ_ONLY_PORT=3000 \
+    ADMIN_PORT=3001 \
     DATABASE_PATH=/data/database.sqlite \
     UPLOAD_DIR=/data/uploads
 
-# Health check
+# Health check (check read-only server)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 

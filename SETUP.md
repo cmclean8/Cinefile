@@ -1,4 +1,4 @@
-# Cineshelf - Setup Guide
+# Cinefile - Setup Guide
 
 ## Prerequisites
 

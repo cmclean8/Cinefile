@@ -73,15 +73,15 @@ const Navigation: React.FC = () => {
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 h-16">
             {!isCollapsed && (
               <div className="flex items-center gap-2">
-                <img src="/icon-32.png" alt="Cineshelf" className="w-8 h-8 dark:hidden" />
-                <img src="/icon-32-dark.png" alt="Cineshelf" className="w-8 h-8 hidden dark:block" />
-                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Cineshelf</h2>
+                <img src="/icon-32.png" alt="Cinefile" className="w-8 h-8 dark:hidden" />
+                <img src="/icon-32-dark.png" alt="Cinefile" className="w-8 h-8 hidden dark:block" />
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Cinefile</h2>
               </div>
             )}
             {isCollapsed && (
               <div className="flex justify-center w-full">
-                <img src="/icon-32.png" alt="Cineshelf" className="w-8 h-8 dark:hidden" />
-                <img src="/icon-32-dark.png" alt="Cineshelf" className="w-8 h-8 hidden dark:block" />
+                <img src="/icon-32.png" alt="Cinefile" className="w-8 h-8 dark:hidden" />
+                <img src="/icon-32-dark.png" alt="Cinefile" className="w-8 h-8 hidden dark:block" />
               </div>
             )}
             

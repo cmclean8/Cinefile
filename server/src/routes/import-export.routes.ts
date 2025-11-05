@@ -110,7 +110,7 @@ function groupBy<T>(array: T[], key: keyof T): Record<string, T[]> {
  */
 router.get('/schema', (req: Request, res: Response) => {
   const schema = {
-    description: 'CSV Import/Export Schema for Cineshelf Media Collection',
+    description: 'CSV Import/Export Schema for Cinefile Media Collection',
     format: 'CSV (Comma-Separated Values)',
     encoding: 'UTF-8',
     fields: [
@@ -321,7 +321,7 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
     // Set headers for file download
     const timestamp = new Date().toISOString().split('T')[0];
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="cineshelf-export-${timestamp}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="cinefile-export-${timestamp}.csv"`);
     
     res.send(csv);
   } catch (error) {

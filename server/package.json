@@ -1,7 +1,7 @@
 {
-  "name": "cineshelf-server",
+  "name": "cinefile-server",
   "version": "1.0.0",
-  "description": "Backend server for Cineshelf media collection app",
+  "description": "Backend server for Cinefile media collection app",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

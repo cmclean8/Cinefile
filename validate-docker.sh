@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Cineshelf Docker Validation Script
+# Cinefile Docker Validation Script
 # This script validates that the Docker setup is correct
 
 set -e
 
-echo "🎬 Cineshelf Docker Validation"
+echo "🎬 Cinefile Docker Validation"
 echo "=============================="
 echo ""
 
@@ -114,21 +114,21 @@ read -p "Do you want to test building the Docker image? This may take a few minu
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Building Docker image..."
-    if docker build -t cineshelf:validation-test . > /tmp/cineshelf-build.log 2>&1; then
+    if docker build -t cinefile:validation-test . > /tmp/cinefile-build.log 2>&1; then
         echo -e "${GREEN}✓${NC} Docker build successful"
         
         # Check if import-export route exists in built image
         echo "Checking if new features are included..."
-        if docker run --rm cineshelf:validation-test ls dist/routes/import-export.routes.js > /dev/null 2>&1; then
+        if docker run --rm cinefile:validation-test ls dist/routes/import-export.routes.js > /dev/null 2>&1; then
             echo -e "${GREEN}✓${NC} import-export.routes.js found in image"
         else
             echo -e "${RED}✗${NC} import-export.routes.js not found in image"
         fi
         
         # Clean up
-        docker rmi cineshelf:validation-test > /dev/null 2>&1
+        docker rmi cinefile:validation-test > /dev/null 2>&1
     else
-        echo -e "${RED}✗${NC} Docker build failed. Check /tmp/cineshelf-build.log for details"
+        echo -e "${RED}✗${NC} Docker build failed. Check /tmp/cinefile-build.log for details"
         exit 1
     fi
 else
@@ -141,7 +141,7 @@ echo "=============================="
 echo -e "${GREEN}✓ Validation Complete!${NC}"
 echo "=============================="
 echo ""
-echo "Your Cineshelf Docker setup is ready!"
+echo "Your Cinefile Docker setup is ready!"
 echo ""
 echo "Next steps:"
 echo "  1. Configure .env.docker with your API keys"
