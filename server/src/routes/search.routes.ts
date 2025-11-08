@@ -59,7 +59,7 @@ router.get('/movies/:id', async (req: Request, res: Response) => {
 
 /**
  * POST /api/search/bulk-movies
- * Search for multiple movies on TMDb
+ * Search for multiple movies on TMDb with retry logic and rate limiting
  */
 router.post('/bulk-movies', async (req: Request, res: Response) => {
   try {
@@ -73,53 +73,213 @@ router.post('/bulk-movies', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'At least one title is required' });
     }
 
-    if (titles.length > 50) {
-      return res.status(400).json({ error: 'Maximum 50 titles allowed per request' });
+    if (titles.length > 200) {
+      return res.status(400).json({ error: 'Maximum 200 titles allowed per request' });
     }
 
-    const results = await Promise.allSettled(
-      titles.map(async (title: string) => {
-        if (typeof title !== 'string' || !title.trim()) {
-          throw new Error('Invalid title');
-        }
-        
-        const searchResults = await tmdbService.searchMovies(title.trim());
-        
-        // Fetch detailed information for each match
-        const detailedMatches = await Promise.allSettled(
-          searchResults.results.map(async (movie) => {
-            try {
-              const details = await tmdbService.getMovieDetails(movie.id);
-              const director = tmdbService.getDirector(details.credits);
-              const cast = tmdbService.getTopCast(details.credits, 10);
-              const posterUrl = tmdbService.getImageUrl(details.poster_path);
-              
-              return {
-                ...details,
-                director,
-                cast,
-                poster_url: posterUrl,
-              };
-            } catch (error) {
-              // If detailed fetch fails, return basic movie info
-              console.warn(`Failed to fetch details for movie ${movie.id}:`, error);
-              return movie;
-            }
-          })
-        );
-        
-        const successfulMatches = detailedMatches
-          .filter((result) => result.status === 'fulfilled')
-          .map((result) => result.value);
-        
-        return {
-          originalTitle: title.trim(),
-          matches: successfulMatches,
-          selectedMatch: successfulMatches[0] || null // Default to first result
-        };
-      })
-    );
+    // Process searches in batches to respect rate limits
+    // Batch size: process 5 at a time to avoid overwhelming the API
+    const BATCH_SIZE = 5;
+    const results: Array<{ status: 'fulfilled' | 'rejected'; value?: any; reason?: any }> = [];
+    const failedSearches: Array<{ index: number; title: string; error: string; isApiError: boolean }> = [];
 
+    console.log(`[BulkSearch] Starting search for ${titles.length} titles in batches of ${BATCH_SIZE}`);
+
+    // First pass: process all titles in batches
+    for (let i = 0; i < titles.length; i += BATCH_SIZE) {
+      const batch = titles.slice(i, Math.min(i + BATCH_SIZE, titles.length));
+      
+      const batchResults = await Promise.allSettled(
+        batch.map(async (title: string, batchIndex: number) => {
+          const actualIndex = i + batchIndex;
+          
+          if (typeof title !== 'string' || !title.trim()) {
+            throw new Error('Invalid title');
+          }
+          
+          try {
+            const searchResults = await tmdbService.searchMovies(title.trim());
+            
+            // If no results, try searching with common variations
+            if (searchResults.results.length === 0) {
+              // Try without common prefixes/suffixes
+              const variations = [
+                title.trim().replace(/^(the|a|an)\s+/i, ''),
+                title.trim().replace(/\s+(the|a|an)$/i, ''),
+              ].filter(v => v !== title.trim() && v.length > 0);
+              
+              for (const variation of variations) {
+                try {
+                  const altResults = await tmdbService.searchMovies(variation);
+                  if (altResults.results.length > 0) {
+                    searchResults.results = altResults.results;
+                    break;
+                  }
+                } catch {
+                  // Continue to next variation
+                }
+              }
+            }
+            
+            // Fetch detailed information for each match (limit to top 5 to reduce API calls)
+            const topMatches = searchResults.results.slice(0, 5);
+            const detailedMatches = await Promise.allSettled(
+              topMatches.map(async (movie) => {
+                try {
+                  const details = await tmdbService.getMovieDetails(movie.id);
+                  const director = tmdbService.getDirector(details.credits);
+                  const cast = tmdbService.getTopCast(details.credits, 10);
+                  const posterUrl = tmdbService.getImageUrl(details.poster_path);
+                  
+                  return {
+                    ...details,
+                    director,
+                    cast,
+                    poster_url: posterUrl,
+                  };
+                } catch (error) {
+                  // If detailed fetch fails, return basic movie info
+                  console.warn(`Failed to fetch details for movie ${movie.id}:`, error);
+                  return movie;
+                }
+              })
+            );
+            
+            const successfulMatches = detailedMatches
+              .filter((result) => result.status === 'fulfilled')
+              .map((result) => result.value);
+            
+            return {
+              originalTitle: title.trim(),
+              matches: successfulMatches,
+              selectedMatch: successfulMatches[0] || null,
+            };
+          } catch (error: any) {
+            // Distinguish between API errors and no matches
+            const errorMessage = error.message || 'Unknown error';
+            const isApiError = errorMessage.includes('Failed to search') || 
+                              errorMessage.includes('Rate limited') ||
+                              errorMessage.includes('429') ||
+                              errorMessage.includes('timeout') ||
+                              errorMessage.includes('network');
+            
+            throw {
+              isApiError,
+              message: isApiError ? 'API request failed - will retry' : 'No matches found',
+              originalError: errorMessage,
+            };
+          }
+        })
+      );
+
+      // Collect results and track failures
+      batchResults.forEach((result, batchIndex) => {
+        const actualIndex = i + batchIndex;
+        results[actualIndex] = result;
+        
+        if (result.status === 'rejected') {
+          const error = result.reason;
+          failedSearches.push({
+            index: actualIndex,
+            title: titles[actualIndex],
+            error: error.isApiError ? error.originalError : error.message || 'No matches found',
+            isApiError: error.isApiError || false,
+          });
+        }
+      });
+
+      // Small delay between batches to help with rate limiting
+      if (i + BATCH_SIZE < titles.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+
+    // Second pass: retry failed searches that were API errors
+    const apiFailures = failedSearches.filter(f => f.isApiError);
+
+    if (apiFailures.length > 0) {
+      console.log(`[BulkSearch] Retrying ${apiFailures.length} failed API requests...`);
+      
+      // Wait a bit before retry pass to let rate limits reset
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      for (const failure of apiFailures) {
+        const title = failure.title;
+        
+        try {
+          const searchResults = await tmdbService.searchMovies(title.trim());
+          
+          // Try variations if no results
+          if (searchResults.results.length === 0) {
+            const variations = [
+              title.trim().replace(/^(the|a|an)\s+/i, ''),
+              title.trim().replace(/\s+(the|a|an)$/i, ''),
+            ].filter(v => v !== title.trim() && v.length > 0);
+            
+            for (const variation of variations) {
+              try {
+                const altResults = await tmdbService.searchMovies(variation);
+                if (altResults.results.length > 0) {
+                  searchResults.results = altResults.results;
+                  break;
+                }
+              } catch {
+                // Continue to next variation
+              }
+            }
+          }
+          
+          const topMatches = searchResults.results.slice(0, 5);
+          const detailedMatches = await Promise.allSettled(
+            topMatches.map(async (movie) => {
+              try {
+                const details = await tmdbService.getMovieDetails(movie.id);
+                const director = tmdbService.getDirector(details.credits);
+                const cast = tmdbService.getTopCast(details.credits, 10);
+                const posterUrl = tmdbService.getImageUrl(details.poster_path);
+                
+                return {
+                  ...details,
+                  director,
+                  cast,
+                  poster_url: posterUrl,
+                };
+              } catch (error) {
+                console.warn(`Failed to fetch details for movie ${movie.id}:`, error);
+                return movie;
+              }
+            })
+          );
+          
+          const successfulMatches = detailedMatches
+            .filter((result) => result.status === 'fulfilled')
+            .map((result) => result.value);
+          
+          // Update the result
+          results[failure.index] = {
+            status: 'fulfilled',
+            value: {
+              originalTitle: title.trim(),
+              matches: successfulMatches,
+              selectedMatch: successfulMatches[0] || null,
+            },
+          };
+          
+          // Remove from failures list
+          const failureIndex = failedSearches.findIndex(f => f.index === failure.index);
+          if (failureIndex >= 0) {
+            failedSearches.splice(failureIndex, 1);
+          }
+          
+          console.log(`[BulkSearch] Successfully retried "${title}"`);
+        } catch (error: any) {
+          // Still failed after retry - keep as failure
+          console.warn(`[BulkSearch] Retry failed for "${title}":`, error);
+        }
+      }
+    }
+
+    // Build final results
     const matched: any[] = [];
     const unmatched: any[] = [];
 
@@ -127,12 +287,19 @@ router.post('/bulk-movies', async (req: Request, res: Response) => {
       if (result.status === 'fulfilled' && result.value.matches.length > 0) {
         matched.push(result.value);
       } else {
+        const failure = failedSearches.find(f => f.index === index);
         unmatched.push({
           originalTitle: titles[index],
-          error: result.status === 'rejected' ? result.reason.message : 'No matches found'
+          error: failure?.error || 
+                 (result.status === 'rejected' 
+                   ? (result.reason?.message || result.reason?.originalError || 'No matches found')
+                   : 'No matches found'),
+          wasRetried: failure?.isApiError || false,
         });
       }
     });
+
+    console.log(`[BulkSearch] Completed: ${matched.length} matched, ${unmatched.length} unmatched, ${apiFailures.length} retried`);
 
     res.json({
       matched,
@@ -140,8 +307,9 @@ router.post('/bulk-movies', async (req: Request, res: Response) => {
       summary: {
         total: titles.length,
         matched: matched.length,
-        unmatched: unmatched.length
-      }
+        unmatched: unmatched.length,
+        retried: apiFailures.length,
+      },
     });
   } catch (error) {
     console.error('Error in bulk movie search:', error);

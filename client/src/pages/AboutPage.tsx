@@ -1,4 +1,5 @@
 import React from 'react';
+import Logo from '../components/Logo';
 
 const AboutPage: React.FC = () => {
   return (
@@ -7,19 +8,8 @@ const AboutPage: React.FC = () => {
         {/* Header */}
         <div className="mb-12">
           <div className="flex items-center justify-center mb-6">
-            <svg className="w-16 h-16 text-primary-600 dark:text-primary-400 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <rect width="18" height="18" x="3" y="3" rx="2"/>
-              <path d="M7 3v18"/>
-              <path d="M3 7.5h4"/>
-              <path d="M3 12h18"/>
-              <path d="M3 16.5h4"/>
-              <path d="M17 3v18"/>
-              <path d="M17 7.5h4"/>
-              <path d="M17 16.5h4"/>
-            </svg>
-            <h1 className="text-6xl font-bold text-gray-900 dark:text-gray-100 flex items-center justify-center gap-4">
-              <img src="/icon-32.png" alt="Cinefile" className="w-16 h-16 dark:hidden" />
-              <img src="/icon-32-dark.png" alt="Cinefile" className="w-16 h-16 hidden dark:block" />
+            <Logo size="lg" className="mr-4" />
+            <h1 className="text-6xl font-bold text-gray-900 dark:text-gray-100">
               Cinefile
             </h1>
           </div>

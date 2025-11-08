@@ -75,6 +75,7 @@ router.get('/', async (req: Request, res: Response) => {
       return {
         ...item,
         cast: item.cast ? JSON.parse(item.cast) : [],
+        genres: item.genres ? JSON.parse(item.genres) : [],
         series,
         // Remove the concatenated fields
         series_ids: undefined,
@@ -103,9 +104,12 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Media item not found' });
     }
 
-    // Parse cast JSON string
+    // Parse cast and genres JSON strings
     if (media.cast) {
       media.cast = JSON.parse(media.cast);
+    }
+    if (media.genres) {
+      media.genres = JSON.parse(media.genres);
     }
 
     res.json(media);

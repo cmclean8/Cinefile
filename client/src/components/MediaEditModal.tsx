@@ -204,7 +204,9 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ media, isOpen, onClose,
                                 {key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}:
                               </span>
                               <div className="mt-1 text-gray-600 dark:text-gray-400">
-                                {key === 'cast' ? (_value as string[]).join(', ') : String(_value || 'N/A')}
+                                {key === 'cast' ? (_value as string[]).join(', ') : 
+                                 key === 'genres' ? (_value as Array<{id: number; name: string}>).map(g => g.name).join(', ') :
+                                 String(_value || 'N/A')}
                               </div>
                             </div>
                           ))}
@@ -346,6 +348,24 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ media, isOpen, onClose,
                       </button>
                     </div>
                   </div>
+
+                  {media.genres && media.genres.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Genres
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {media.genres.map((genre) => (
+                          <span
+                            key={genre.id}
+                            className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm"
+                          >
+                            {genre.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

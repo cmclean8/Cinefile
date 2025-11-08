@@ -26,7 +26,9 @@ const CollectionPage: React.FC = () => {
   const [collectionTitle, setCollectionTitle] = useState('Media Collection');
   
   // Filter state
-  const [format, setFormat] = useState<PhysicalFormat>('all');
+  const [format, setFormat] = useState<PhysicalFormat | PhysicalFormat[]>('all');
+  const [selectedGenres, setSelectedGenres] = useState<number[]>([]);
+  const [selectedDecades, setSelectedDecades] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortField>('title');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,7 +96,7 @@ const CollectionPage: React.FC = () => {
     if (isInitialized) {
       loadInitialData();
     }
-  }, [format, sortBy, sortOrder, debouncedSearchQuery, isInitialized]);
+  }, [format, selectedGenres, selectedDecades, sortBy, sortOrder, debouncedSearchQuery, isInitialized]);
 
   // Load statistics on mount
   useEffect(() => {
@@ -116,8 +118,14 @@ const CollectionPage: React.FC = () => {
     setIsLoading(true);
     try {
       // Load physical items with filters
+      const formatValue: PhysicalFormat | PhysicalFormat[] | undefined = Array.isArray(format) 
+        ? (format.length === 0 ? undefined : format)
+        : (format === 'all' ? undefined : format);
+      
       const response = await apiService.getPhysicalItems({
-        format: format !== 'all' ? format : undefined,
+        format: formatValue,
+        genres: selectedGenres.length > 0 ? selectedGenres : undefined,
+        decades: selectedDecades.length > 0 ? selectedDecades : undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
         search: debouncedSearchQuery || undefined,
@@ -142,8 +150,14 @@ const CollectionPage: React.FC = () => {
     setIsLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
+      const formatValue: PhysicalFormat | PhysicalFormat[] | undefined = Array.isArray(format) 
+        ? (format.length === 0 ? undefined : format)
+        : (format === 'all' ? undefined : format);
+      
       const response = await apiService.getPhysicalItems({
-        format: format !== 'all' ? format : undefined,
+        format: formatValue,
+        genres: selectedGenres.length > 0 ? selectedGenres : undefined,
+        decades: selectedDecades.length > 0 ? selectedDecades : undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
         search: debouncedSearchQuery || undefined,
@@ -159,7 +173,7 @@ const CollectionPage: React.FC = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMore, currentPage, format, sortBy, sortOrder, debouncedSearchQuery]);
+  }, [isLoadingMore, hasMore, currentPage, format, selectedGenres, selectedDecades, sortBy, sortOrder, debouncedSearchQuery]);
 
   const handleSortChange = (newSortBy: SortField, newSortOrder: SortOrder) => {
     setSortBy(newSortBy);
@@ -178,6 +192,8 @@ const CollectionPage: React.FC = () => {
 
   const handleClearFilters = () => {
     setFormat('all');
+    setSelectedGenres([]);
+    setSelectedDecades([]);
     setSearchQuery('');
     // Reset to default sort for public users
     if (!canEdit) {
@@ -185,6 +201,37 @@ const CollectionPage: React.FC = () => {
       setSortOrder('asc');
     }
   };
+
+  // Extract available genres and decades from collection
+  const availableGenres = React.useMemo(() => {
+    const genreMap = new Map<number, { id: number; name: string }>();
+    physicalItems.forEach(item => {
+      item.media.forEach(media => {
+        if (media.genres) {
+          media.genres.forEach(genre => {
+            if (!genreMap.has(genre.id)) {
+              genreMap.set(genre.id, genre);
+            }
+          });
+        }
+      });
+    });
+    return Array.from(genreMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [physicalItems]);
+
+  const availableDecades = React.useMemo(() => {
+    const decadeSet = new Set<string>();
+    physicalItems.forEach(item => {
+      item.media.forEach(media => {
+        if (media.release_date) {
+          const year = new Date(media.release_date).getFullYear();
+          const decade = Math.floor(year / 10) * 10;
+          decadeSet.add(decade.toString());
+        }
+      });
+    });
+    return Array.from(decadeSet).sort((a, b) => parseInt(a) - parseInt(b));
+  }, [physicalItems]);
 
 
   const handleEditItem = (item: PhysicalItem) => {
@@ -285,7 +332,13 @@ const CollectionPage: React.FC = () => {
         sortBy={sortBy}
         sortOrder={sortOrder}
         searchQuery={searchQuery}
+        selectedGenres={selectedGenres}
+        selectedDecades={selectedDecades}
+        availableGenres={availableGenres}
+        availableDecades={availableDecades}
         onFormatChange={setFormat}
+        onGenresChange={setSelectedGenres}
+        onDecadesChange={setSelectedDecades}
         onSortChange={handleSortChange}
         onSearchChange={handleSearchChange}
         onClearFilters={handleClearFilters}

@@ -149,7 +149,20 @@ class ApiService {
   async getPhysicalItems(filterOptions?: FilterOptions): Promise<{ items: PhysicalItem[]; pagination: any }> {
     const params: any = {};
     if (filterOptions) {
-      if (filterOptions.format) params.format = filterOptions.format;
+      if (filterOptions.format) {
+        // Handle both single format and array of formats
+        if (Array.isArray(filterOptions.format)) {
+          params.format = filterOptions.format.join(',');
+        } else {
+          params.format = filterOptions.format;
+        }
+      }
+      if (filterOptions.genres && filterOptions.genres.length > 0) {
+        params.genres = filterOptions.genres.join(',');
+      }
+      if (filterOptions.decades && filterOptions.decades.length > 0) {
+        params.decades = filterOptions.decades.join(',');
+      }
       if (filterOptions.sort_by) params.sort_by = filterOptions.sort_by;
       if (filterOptions.sort_order) params.sort_order = filterOptions.sort_order;
       if (filterOptions.search) params.search = filterOptions.search;
@@ -287,6 +300,17 @@ class ApiService {
   // Statistics methods
   async getStatistics(): Promise<CollectionStatistics> {
     const response = await this.api.get<CollectionStatistics>('/statistics');
+    return response.data;
+  }
+
+  // Bulk metadata methods
+  async startBulkMetadata(): Promise<{ jobId: string | null; total: number; message?: string }> {
+    const response = await this.api.post<{ jobId: string | null; total: number; message?: string }>('/media/bulk-metadata');
+    return response.data;
+  }
+
+  async getBulkMetadataStatus(jobId: string): Promise<any> {
+    const response = await this.api.get(`/media/bulk-metadata/${jobId}`);
     return response.data;
   }
 }

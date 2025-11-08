@@ -13,6 +13,8 @@ interface MediaExportRow {
   release_date: string | null;
   director: string | null;
   cast: string | null;
+  genres: string | null;
+  series_names: string | null;
   physical_item_name: string;
   formats: string;
   disc_number: number | null;
@@ -34,6 +36,8 @@ interface MediaImportRow {
   release_date?: string;
   director?: string;
   cast?: string;
+  genres?: string;
+  series?: string;
   disc_number?: string | number;
   edition_notes?: string;
   purchase_date?: string;
@@ -179,6 +183,20 @@ router.get('/schema', (req: Request, res: Response) => {
         example: '["Keanu Reeves","Laurence Fishburne","Carrie-Anne Moss"]',
       },
       {
+        name: 'genres',
+        type: 'JSON array (string)',
+        required: false,
+        description: 'Genres as JSON array of objects with id and name properties',
+        example: '[{"id":28,"name":"Action"},{"id":878,"name":"Science Fiction"}]',
+      },
+      {
+        name: 'series',
+        type: 'JSON array (string)',
+        required: false,
+        description: 'Series names as JSON array string. Movies can belong to multiple series.',
+        example: '["The Matrix Trilogy","Sci-Fi Classics"]',
+      },
+      {
         name: 'disc_number',
         type: 'integer',
         required: false,
@@ -221,7 +239,9 @@ router.get('/schema', (req: Request, res: Response) => {
       'For IMPORT: The physical item\'s overall formats will be automatically calculated from all movies\' formats.',
       'For IMPORT: If a field contains commas, newlines, or quotes, wrap the entire value in double quotes.',
       'For IMPORT: To include a quote character within a quoted field, use two consecutive quotes ("").',
-      'For IMPORT: The cast and store_links fields should be valid JSON arrays as strings.',
+      'For IMPORT: The cast, genres, series, and store_links fields should be valid JSON arrays as strings.',
+      'For IMPORT: If tmdb_id matches an existing movie, the movie will be updated with CSV data instead of creating a duplicate.',
+      'For IMPORT: Series names will be created if they don\'t exist, and movies will be linked to them.',
       'For EXPORT: All fields will be exported including id, created_at, and updated_at.',
       'For EXPORT: Each row represents one movie, with physical item details duplicated for movies in the same physical item.',
       'For EXPORT: You can re-import an exported CSV - the id, created_at, and updated_at fields will be ignored on import.',
@@ -243,9 +263,12 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
   try {
     // Query from physical_items table with joins to physical_item_media and media
     // Each row in CSV represents one movie (not one physical item)
+    // Also join with series to get series names
     const items = await db('physical_item_media')
       .join('physical_items', 'physical_item_media.physical_item_id', 'physical_items.id')
       .join('media', 'physical_item_media.media_id', 'media.id')
+      .leftJoin('movie_series', 'media.id', 'movie_series.media_id')
+      .leftJoin('series', 'movie_series.series_id', 'series.id')
       .select(
         'physical_items.name as physical_item_name',
         'physical_items.edition_notes',
@@ -263,7 +286,31 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
         'media.cover_art_url',
         'media.release_date',
         'media.director',
-        'media.cast'
+        'media.cast',
+        'media.genres',
+        db.raw('GROUP_CONCAT(DISTINCT series.name) as series_names')
+      )
+      .groupBy(
+        'physical_items.id',
+        'physical_item_media.id',
+        'media.id',
+        'physical_items.name',
+        'physical_items.edition_notes',
+        'physical_items.purchase_date',
+        'physical_items.store_links',
+        'physical_items.custom_image_url',
+        'physical_items.created_at',
+        'physical_items.updated_at',
+        'physical_item_media.disc_number',
+        'physical_item_media.formats',
+        'media.title',
+        'media.tmdb_id',
+        'media.synopsis',
+        'media.cover_art_url',
+        'media.release_date',
+        'media.director',
+        'media.cast',
+        'media.genres'
       )
       .orderBy('physical_items.created_at', 'desc')
       .orderBy('physical_item_media.disc_number', 'asc');
@@ -278,6 +325,8 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
       'release_date',
       'director',
       'cast',
+      'genres',
+      'series',
       'physical_item_name',
       'formats',
       'disc_number',
@@ -294,6 +343,13 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
 
     // CSV Data
     items.forEach((item: MediaExportRow) => {
+      // Convert series_names (comma-separated) to JSON array string for export
+      let seriesArray: string[] = [];
+      if (item.series_names) {
+        seriesArray = item.series_names.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      }
+      const seriesJson = seriesArray.length > 0 ? JSON.stringify(seriesArray) : '';
+
       const row = [
         escapeCSV(item.id),
         escapeCSV(item.title),
@@ -303,6 +359,8 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
         escapeCSV(item.release_date),
         escapeCSV(item.director),
         escapeCSV(item.cast), // Already JSON string in DB
+        escapeCSV(item.genres), // Already JSON string in DB
+        escapeCSV(seriesJson), // Convert to JSON array string
         escapeCSV(item.physical_item_name),
         escapeCSV(item.formats), // Already JSON string in DB
         escapeCSV(item.disc_number),
@@ -383,10 +441,22 @@ router.post('/import', authMiddleware, async (req: Request, res: Response) => {
 
     // If replace mode, delete existing physical items and their links
     if (mode === 'replace') {
+      try {
         await db.transaction(async (trx: any) => {
-          await trx('physical_item_media').delete();
+          // Delete physical_items first - CASCADE will automatically delete physical_item_media
+          // This is the correct order: parent table first, child table cascades
           await trx('physical_items').delete();
+          
+          // Clean up any orphaned links (in case CASCADE didn't work or foreign keys are disabled)
+          // This is safe even if CASCADE worked - it will just delete 0 rows
+          await trx('physical_item_media').whereNotExists(
+            trx('physical_items').select('id').whereRaw('physical_items.id = physical_item_media.physical_item_id')
+          ).delete();
         });
+      } catch (error) {
+        console.error('Error deleting existing items in replace mode:', error);
+        throw error; // Re-throw to be caught by outer catch block
+      }
     }
 
     // Parse CSV rows
@@ -460,6 +530,40 @@ router.post('/import', authMiddleware, async (req: Request, res: Response) => {
             JSON.parse(rowData.cast); // Validate JSON
           } catch {
             throw new Error(`Invalid JSON in cast: ${rowData.cast}`);
+          }
+        }
+
+        if (rowData.genres) {
+          try {
+            const genresArray = JSON.parse(rowData.genres);
+            if (!Array.isArray(genresArray)) {
+              throw new Error('genres must be a JSON array');
+            }
+            // Validate genre structure if provided
+            for (const genre of genresArray) {
+              if (typeof genre !== 'object' || !genre.id || !genre.name) {
+                throw new Error('Each genre must be an object with id and name properties');
+              }
+            }
+          } catch (e) {
+            throw new Error(`Invalid JSON in genres: ${rowData.genres}`);
+          }
+        }
+
+        if (rowData.series) {
+          try {
+            const seriesArray = JSON.parse(rowData.series);
+            if (!Array.isArray(seriesArray)) {
+              throw new Error('series must be a JSON array');
+            }
+            // Validate that all series names are strings
+            for (const seriesName of seriesArray) {
+              if (typeof seriesName !== 'string') {
+                throw new Error('Each series name must be a string');
+              }
+            }
+          } catch (e) {
+            throw new Error(`Invalid JSON in series: ${rowData.series}`);
           }
         }
 
@@ -538,36 +642,111 @@ router.post('/import', authMiddleware, async (req: Request, res: Response) => {
             }
             
             // Find existing media by tmdb_id if provided
+            let existingMedia = null;
             if (movie.tmdb_id) {
-              const existingMedia = await trx('media').where('tmdb_id', movie.tmdb_id).first();
+              existingMedia = await trx('media').where('tmdb_id', movie.tmdb_id).first();
               if (existingMedia) {
                 mediaId = existingMedia.id;
               }
             }
             
-            // Create new media entry if not found
-            if (!mediaId) {
-              const mediaData: any = {
-                title: movie.title,
-                tmdb_id: movie.tmdb_id || null,
-                synopsis: movie.synopsis || null,
-                cover_art_url: movie.cover_art_url || null,
-                release_date: movie.release_date || null,
-                director: movie.director || null,
-                cast: movie.cast || null,
-              };
+            // Prepare media data
+            const mediaData: any = {
+              title: movie.title,
+              tmdb_id: movie.tmdb_id || null,
+              synopsis: movie.synopsis || null,
+              cover_art_url: movie.cover_art_url || null,
+              release_date: movie.release_date || null,
+              director: movie.director || null,
+              cast: movie.cast || null,
+              genres: movie.genres || null,
+            };
 
+            // Create new media entry or update existing one
+            if (!mediaId) {
               const [newMediaId] = await trx('media').insert(mediaData);
               mediaId = newMediaId;
+            } else {
+              // Update existing media with CSV data
+              await trx('media').where('id', mediaId).update({
+                ...mediaData,
+                updated_at: db.fn.now(),
+              });
             }
 
-            // Create physical_item_media link
-            await trx('physical_item_media').insert({
-              physical_item_id: physicalItem.id,
-              media_id: mediaId,
-              disc_number: movie.disc_number || 1,
-              formats: JSON.stringify(formatArray),
-            });
+            // Create physical_item_media link (check for duplicates first)
+            const existingLink = await trx('physical_item_media')
+              .where({
+                physical_item_id: physicalItem.id,
+                media_id: mediaId,
+              })
+              .first();
+
+            if (!existingLink) {
+              await trx('physical_item_media').insert({
+                physical_item_id: physicalItem.id,
+                media_id: mediaId,
+                disc_number: movie.disc_number || 1,
+                formats: JSON.stringify(formatArray),
+              });
+            } else {
+              // Update existing link if formats or disc_number changed
+              await trx('physical_item_media')
+                .where({
+                  physical_item_id: physicalItem.id,
+                  media_id: mediaId,
+                })
+                .update({
+                  disc_number: movie.disc_number || 1,
+                  formats: JSON.stringify(formatArray),
+                  updated_at: db.fn.now(),
+                });
+            }
+
+            // Handle series associations
+            if (movie.series) {
+              try {
+                const seriesArray = JSON.parse(movie.series);
+                if (Array.isArray(seriesArray) && seriesArray.length > 0) {
+                  // Remove existing series associations for this media
+                  await trx('movie_series').where('media_id', mediaId).delete();
+
+                  // Create new series associations
+                  for (const seriesName of seriesArray) {
+                    if (typeof seriesName === 'string' && seriesName.trim()) {
+                      // Find or create series
+                      let series = await trx('series').where('name', seriesName.trim()).first();
+                      if (!series) {
+                        const [seriesId] = await trx('series').insert({
+                          name: seriesName.trim(),
+                          sort_name: seriesName.trim(),
+                        });
+                        series = { id: seriesId };
+                      }
+
+                      // Link media to series
+                      const existingSeriesLink = await trx('movie_series')
+                        .where({
+                          media_id: mediaId,
+                          series_id: series.id,
+                        })
+                        .first();
+
+                      if (!existingSeriesLink) {
+                        await trx('movie_series').insert({
+                          media_id: mediaId,
+                          series_id: series.id,
+                          auto_sort: true,
+                        });
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                // If series parsing fails, log but don't fail the import
+                console.warn(`Failed to parse series for movie "${movie.title}":`, e);
+              }
+            }
 
             // Collect formats for physical item
             formatArray.forEach((f: string) => allFormats.add(f));
@@ -765,6 +944,62 @@ router.post('/validate', authMiddleware, async (req: Request, res: Response) => 
             validationResults.warnings.push({
               row: i + 1,
               warning: 'cast is not valid JSON',
+            });
+          }
+        }
+
+        if (rowData.genres) {
+          try {
+            const genresArray = JSON.parse(rowData.genres);
+            if (!Array.isArray(genresArray)) {
+              validationResults.warnings.push({
+                row: i + 1,
+                warning: 'genres should be a JSON array',
+              });
+            } else {
+              // Validate genre structure
+              for (const genre of genresArray) {
+                if (typeof genre !== 'object' || !genre.id || !genre.name) {
+                  validationResults.warnings.push({
+                    row: i + 1,
+                    warning: 'Each genre should be an object with id and name properties',
+                  });
+                  break;
+                }
+              }
+            }
+          } catch {
+            validationResults.warnings.push({
+              row: i + 1,
+              warning: 'genres is not valid JSON',
+            });
+          }
+        }
+
+        if (rowData.series) {
+          try {
+            const seriesArray = JSON.parse(rowData.series);
+            if (!Array.isArray(seriesArray)) {
+              validationResults.warnings.push({
+                row: i + 1,
+                warning: 'series should be a JSON array',
+              });
+            } else {
+              // Validate that all series names are strings
+              for (const seriesName of seriesArray) {
+                if (typeof seriesName !== 'string') {
+                  validationResults.warnings.push({
+                    row: i + 1,
+                    warning: 'Each series name should be a string',
+                  });
+                  break;
+                }
+              }
+            }
+          } catch {
+            validationResults.warnings.push({
+              row: i + 1,
+              warning: 'series is not valid JSON',
             });
           }
         }

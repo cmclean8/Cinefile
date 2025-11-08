@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
+import Logo from './Logo';
 import { useSidebar } from '../context/SidebarContext';
 import { useServerMode } from '../context/ServerModeContext';
 
@@ -70,53 +71,74 @@ const Navigation: React.FC = () => {
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 h-16">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700 h-16">
             {!isCollapsed && (
-              <div className="flex items-center gap-2">
-                <img src="/icon-32.png" alt="Cinefile" className="w-8 h-8 dark:hidden" />
-                <img src="/icon-32-dark.png" alt="Cinefile" className="w-8 h-8 hidden dark:block" />
-                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Cinefile</h2>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Logo size="md" />
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 truncate">Cinefile</h2>
               </div>
             )}
             {isCollapsed && (
-              <div className="flex justify-center w-full">
-                <img src="/icon-32.png" alt="Cinefile" className="w-8 h-8 dark:hidden" />
-                <img src="/icon-32-dark.png" alt="Cinefile" className="w-8 h-8 hidden dark:block" />
+              <div className="flex justify-center items-center w-full h-full">
+                <Logo size="md" />
               </div>
             )}
             
             {/* Desktop Collapse Toggle */}
-            <button
-              onClick={toggleSidebar}
-              className="hidden lg:block p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              <svg
-                className="w-5 h-5 text-gray-600 dark:text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            {!isCollapsed && (
+              <button
+                onClick={toggleSidebar}
+                className="hidden lg:block p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                aria-label="Collapse sidebar"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d={isCollapsed ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"}
-                />
-              </svg>
-            </button>
+                <svg
+                  className="w-4 h-4 text-gray-600 dark:text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+              </button>
+            )}
+            {isCollapsed && (
+              <button
+                onClick={toggleSidebar}
+                className="hidden lg:block p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors absolute right-1 top-1/2 -translate-y-1/2"
+                aria-label="Expand sidebar"
+              >
+                <svg
+                  className="w-4 h-4 text-gray-600 dark:text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            )}
           </div>
 
           {/* Navigation Links */}
-          <nav className="flex-1 p-4 space-y-2">
+          <nav className="flex-1 px-2 py-2 space-y-1">
             <Link
               to="/"
               onClick={closeMobileMenu}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              className={`flex items-center gap-3 px-2 py-2 rounded-lg transition-colors ${
                 isActive('/')
                   ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 font-semibold'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title={isCollapsed ? 'Collection' : undefined}
             >
               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -131,11 +153,11 @@ const Navigation: React.FC = () => {
               <Link
                 to="/admin"
                 onClick={closeMobileMenu}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 px-2 py-2 rounded-lg transition-colors ${
                   isActive('/admin')
                     ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 font-semibold'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                } ${isCollapsed ? 'justify-center' : ''}`}
                 title={isCollapsed ? 'Settings' : undefined}
               >
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -149,11 +171,11 @@ const Navigation: React.FC = () => {
             <Link
               to="/about"
               onClick={closeMobileMenu}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              className={`flex items-center gap-3 px-2 py-2 rounded-lg transition-colors ${
                 isActive('/about')
                   ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 font-semibold'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title={isCollapsed ? 'About' : undefined}
             >
               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -164,13 +186,13 @@ const Navigation: React.FC = () => {
           </nav>
 
           {/* Theme Toggle */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="px-2 py-2 border-t border-gray-200 dark:border-gray-700">
             {isCollapsed ? (
               <div className="flex justify-center">
                 <ThemeToggle />
               </div>
             ) : (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between px-1">
                 <span className="text-sm text-gray-700 dark:text-gray-300">Theme</span>
                 <ThemeToggle />
               </div>

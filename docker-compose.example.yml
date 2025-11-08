@@ -10,12 +10,12 @@ services:
       # Read-Only Port (Public-facing)
       # Maps host port to container port 3000 (read-only server)
       # Default: 3000, change if needed (e.g., 3006:3000)
-      - "${READ_ONLY_PORT:-3000}:3000"
+      - "3000:3000"
       # Admin Port (Full API - Internal/VPN only)
       # Maps host port to container port 3001 (full API server)
       # WARNING: Do not expose this port to the public internet!
       # Default: 3001, change if needed
-      - "${ADMIN_PORT:-3001}:3001"
+      - "3001:3001"
     environment:
       - NODE_ENV=production
       # TMDb API Key - Required for movie search and metadata

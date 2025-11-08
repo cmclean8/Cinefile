@@ -3,6 +3,7 @@ import { Media, SortField, SortOrder } from '../types';
 import { apiService } from '../services/api.service';
 import { useAuth } from '../context/AuthContext';
 import MediaEditModal from '../components/MediaEditModal';
+import BulkMetadataOperation from '../components/BulkMetadataOperation';
 
 const MoviesPage: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -15,6 +16,7 @@ const MoviesPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [showBulkMetadata, setShowBulkMetadata] = useState(false);
 
   // Debounce search query to prevent API calls on every keystroke
   useEffect(() => {
@@ -124,13 +126,34 @@ const MoviesPage: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          Movies Management
-        </h1>
-        <p className="text-gray-600 dark:text-gray-300">
-          {movies.length} {movies.length === 1 ? 'movie' : 'movies'} in your collection
-        </p>
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+              Movies Management
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300">
+              {movies.length} {movies.length === 1 ? 'movie' : 'movies'} in your collection
+            </p>
+          </div>
+          <button
+            onClick={() => setShowBulkMetadata(!showBulkMetadata)}
+            className="btn-primary"
+          >
+            {showBulkMetadata ? 'Hide' : 'Bulk Update Metadata'}
+          </button>
+        </div>
       </div>
+
+      {/* Bulk Metadata Operation */}
+      {showBulkMetadata && (
+        <div className="mb-6">
+          <BulkMetadataOperation
+            onComplete={() => {
+              loadMovies();
+            }}
+          />
+        </div>
+      )}
 
       {/* Controls */}
       <div className="card mb-6">
@@ -305,9 +328,26 @@ const MoviesPage: React.FC = () => {
                     </p>
                   )}
                   {movie.release_date && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                       {new Date(movie.release_date).getFullYear()}
                     </p>
+                  )}
+                  {movie.genres && movie.genres.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {movie.genres.slice(0, 3).map((genre) => (
+                        <span
+                          key={genre.id}
+                          className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
+                        >
+                          {genre.name}
+                        </span>
+                      ))}
+                      {movie.genres.length > 3 && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          +{movie.genres.length - 3}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </>
               ) : (
@@ -335,7 +375,7 @@ const MoviesPage: React.FC = () => {
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
                       {movie.title}
                     </h3>
-                    <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-300">
+                    <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-300 mb-2">
                       {movie.director && <span>{movie.director}</span>}
                       {movie.release_date && <span>{new Date(movie.release_date).getFullYear()}</span>}
                       {movie.series && movie.series.length > 0 && (
@@ -344,6 +384,18 @@ const MoviesPage: React.FC = () => {
                         </span>
                       )}
                     </div>
+                    {movie.genres && movie.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {movie.genres.map((genre) => (
+                          <span
+                            key={genre.id}
+                            className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
+                          >
+                            {genre.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </>
               )}

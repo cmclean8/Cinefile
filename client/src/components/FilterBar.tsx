@@ -1,13 +1,19 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PhysicalFormat, SortField, SortOrder } from '../types';
 import ThemeToggle from './ThemeToggle';
 
 interface FilterBarProps {
-  format: PhysicalFormat;
+  format: PhysicalFormat | PhysicalFormat[];
   sortBy: SortField;
   sortOrder: SortOrder;
   searchQuery: string;
-  onFormatChange: (format: PhysicalFormat) => void;
+  selectedGenres: number[];
+  selectedDecades: string[];
+  availableGenres: Array<{ id: number; name: string }>;
+  availableDecades: string[];
+  onFormatChange: (format: PhysicalFormat | PhysicalFormat[]) => void;
+  onGenresChange: (genres: number[]) => void;
+  onDecadesChange: (decades: string[]) => void;
   onSortChange: (sortBy: SortField, sortOrder: SortOrder) => void;
   onSearchChange: (query: string) => void;
   onClearFilters: () => void;
@@ -18,11 +24,42 @@ const FilterBar: React.FC<FilterBarProps> = ({
   sortBy,
   sortOrder,
   searchQuery,
+  selectedGenres,
+  selectedDecades,
+  availableGenres,
+  availableDecades,
   onFormatChange,
+  onGenresChange,
+  onDecadesChange,
   onSortChange,
   onSearchChange,
   onClearFilters,
 }) => {
+  const [showGenreDropdown, setShowGenreDropdown] = useState(false);
+  const [showDecadeDropdown, setShowDecadeDropdown] = useState(false);
+  const [showFormatDropdown, setShowFormatDropdown] = useState(false);
+  const genreDropdownRef = useRef<HTMLDivElement>(null);
+  const decadeDropdownRef = useRef<HTMLDivElement>(null);
+  const formatDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (genreDropdownRef.current && !genreDropdownRef.current.contains(event.target as Node)) {
+        setShowGenreDropdown(false);
+      }
+      if (decadeDropdownRef.current && !decadeDropdownRef.current.contains(event.target as Node)) {
+        setShowDecadeDropdown(false);
+      }
+      if (formatDropdownRef.current && !formatDropdownRef.current.contains(event.target as Node)) {
+        setShowFormatDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleSortByChange = (newSortBy: SortField) => {
     if (newSortBy === sortBy) {
       // Toggle sort order
@@ -33,6 +70,45 @@ const FilterBar: React.FC<FilterBarProps> = ({
       onSortChange(newSortBy, defaultOrder);
     }
   };
+
+  const handleGenreToggle = (genreId: number) => {
+    if (selectedGenres.includes(genreId)) {
+      onGenresChange(selectedGenres.filter(id => id !== genreId));
+    } else {
+      onGenresChange([...selectedGenres, genreId]);
+    }
+  };
+
+  const handleDecadeToggle = (decade: string) => {
+    if (selectedDecades.includes(decade)) {
+      onDecadesChange(selectedDecades.filter(d => d !== decade));
+    } else {
+      onDecadesChange([...selectedDecades, decade]);
+    }
+  };
+
+  const handleFormatToggle = (formatValue: PhysicalFormat) => {
+    if (formatValue === 'all') {
+      onFormatChange('all');
+    } else {
+      const formatArray = Array.isArray(format) ? format : (format === 'all' ? [] : [format]);
+      if (formatArray.includes(formatValue)) {
+        const newFormats = formatArray.filter(f => f !== formatValue);
+        onFormatChange(newFormats.length === 0 ? 'all' : newFormats);
+      } else {
+        onFormatChange([...formatArray, formatValue]);
+      }
+    }
+  };
+
+  const formatDisplay = Array.isArray(format) 
+    ? (format.length === 0 ? 'All Formats' : `${format.length} selected`)
+    : (format === 'all' ? 'All Formats' : format);
+
+  const hasActiveFilters = searchQuery || 
+    (Array.isArray(format) ? format.length > 0 : format !== 'all') || 
+    selectedGenres.length > 0 || 
+    selectedDecades.length > 0;
 
   return (
     <div className="card mb-6">
@@ -74,21 +150,123 @@ const FilterBar: React.FC<FilterBarProps> = ({
             </div>
           </div>
 
-          {/* Format Filter */}
-          <div className="flex items-center gap-2">
+          {/* Format Filter - Multi-select */}
+          <div className="flex items-center gap-2 relative" ref={formatDropdownRef}>
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Format:</label>
-            <select
-              value={format}
-              onChange={(e) => onFormatChange(e.target.value as PhysicalFormat)}
-              className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="all">All Formats</option>
-              <option value="4K UHD">4K UHD</option>
-              <option value="Blu-ray">Blu-ray</option>
-              <option value="DVD">DVD</option>
-              <option value="LaserDisc">LaserDisc</option>
-              <option value="VHS">VHS</option>
-            </select>
+            <div className="relative">
+              <button
+                onClick={() => setShowFormatDropdown(!showFormatDropdown)}
+                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[120px] text-left flex items-center justify-between"
+              >
+                <span>{formatDisplay}</span>
+                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showFormatDropdown && (
+                <div className="absolute z-50 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div className="p-2">
+                    <label className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Array.isArray(format) ? format.length === 0 : format === 'all'}
+                        onChange={() => handleFormatToggle('all')}
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-gray-900 dark:text-gray-100">All Formats</span>
+                    </label>
+                    {(['4K UHD', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'] as PhysicalFormat[]).map((fmt) => {
+                      const isChecked = Array.isArray(format) ? format.includes(fmt) : false;
+                      return (
+                        <label key={fmt} className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleFormatToggle(fmt)}
+                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="text-sm text-gray-900 dark:text-gray-100">{fmt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Genre Filter - Multi-select */}
+          <div className="flex items-center gap-2 relative" ref={genreDropdownRef}>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Genres:</label>
+            <div className="relative">
+              <button
+                onClick={() => setShowGenreDropdown(!showGenreDropdown)}
+                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[120px] text-left flex items-center justify-between"
+              >
+                <span>{selectedGenres.length === 0 ? 'All Genres' : `${selectedGenres.length} selected`}</span>
+                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showGenreDropdown && (
+                <div className="absolute z-50 mt-1 w-64 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div className="p-2">
+                    {availableGenres.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 p-2">No genres available</p>
+                    ) : (
+                      availableGenres.map((genre) => (
+                        <label key={genre.id} className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedGenres.includes(genre.id)}
+                            onChange={() => handleGenreToggle(genre.id)}
+                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="text-sm text-gray-900 dark:text-gray-100">{genre.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Decade Filter - Multi-select */}
+          <div className="flex items-center gap-2 relative" ref={decadeDropdownRef}>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Decade:</label>
+            <div className="relative">
+              <button
+                onClick={() => setShowDecadeDropdown(!showDecadeDropdown)}
+                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[120px] text-left flex items-center justify-between"
+              >
+                <span>{selectedDecades.length === 0 ? 'All Decades' : `${selectedDecades.length} selected`}</span>
+                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showDecadeDropdown && (
+                <div className="absolute z-50 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div className="p-2">
+                    {availableDecades.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 p-2">No decades available</p>
+                    ) : (
+                      availableDecades.map((decade) => (
+                        <label key={decade} className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedDecades.includes(decade)}
+                            onChange={() => handleDecadeToggle(decade)}
+                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="text-sm text-gray-900 dark:text-gray-100">{decade}s</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Sort Options */}
@@ -151,7 +329,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* Clear Filters & Theme Toggle */}
         <div className="flex items-center gap-4">
-          {(searchQuery || format !== 'all') && (
+          {hasActiveFilters && (
             <button
               onClick={onClearFilters}
               className="text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300 font-medium"

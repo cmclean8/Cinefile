@@ -12,43 +12,18 @@ const DynamicFavicon: React.FC = () => {
       const existingLinks = document.querySelectorAll('link[rel*="icon"]');
       existingLinks.forEach(link => link.remove());
 
-      // Add new favicon based on theme (using 32x32 PNG as main favicon)
+      // Add SVG favicon (works in modern browsers)
       const favicon = document.createElement('link');
       favicon.rel = 'icon';
-      favicon.type = 'image/png';
-      favicon.sizes = '32x32';
-      favicon.href = resolvedTheme === 'dark' ? '/icon-32-dark.png' : '/icon-32.png';
+      favicon.type = 'image/svg+xml';
+      favicon.href = '/favicon.svg';
       document.head.appendChild(favicon);
-      console.log('DynamicFavicon: Added favicon:', favicon.href);
-
-      // Add PNG icons for different sizes
-      const sizes = [16, 32, 192, 512];
-      sizes.forEach(size => {
-        const link = document.createElement('link');
-        link.rel = 'icon';
-        link.type = 'image/png';
-        link.sizes = `${size}x${size}`;
-        link.href = resolvedTheme === 'dark' 
-          ? `/icon-${size}-dark.png` 
-          : `/icon-${size}.png`;
-        document.head.appendChild(link);
-        console.log('DynamicFavicon: Added icon', size, ':', link.href);
-      });
-
-      // Add Apple touch icon
-      const appleTouchIcon = document.createElement('link');
-      appleTouchIcon.rel = 'apple-touch-icon';
-      appleTouchIcon.sizes = '180x180';
-      appleTouchIcon.href = resolvedTheme === 'dark' 
-        ? '/apple-touch-icon-dark.png' 
-        : '/apple-touch-icon.png';
-      document.head.appendChild(appleTouchIcon);
-      console.log('DynamicFavicon: Added apple touch icon:', appleTouchIcon.href);
+      console.log('DynamicFavicon: Added SVG favicon');
 
       // Update manifest for PWA
       const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
       if (manifestLink) {
-        // Create a new manifest with theme-appropriate icons
+        // Create a new manifest
         const manifest = {
           name: "Cinefile",
           short_name: "Cinefile",
@@ -59,15 +34,9 @@ const DynamicFavicon: React.FC = () => {
           theme_color: resolvedTheme === 'dark' ? "#1a3a3a" : "#2D5A5A",
           icons: [
             {
-              src: resolvedTheme === 'dark' ? "/icon-192-dark.png" : "/icon-192.png",
-              sizes: "192x192",
-              type: "image/png",
-              purpose: "any"
-            },
-            {
-              src: resolvedTheme === 'dark' ? "/icon-512-dark.png" : "/icon-512.png",
-              sizes: "512x512",
-              type: "image/png",
+              src: "/favicon.svg",
+              sizes: "any",
+              type: "image/svg+xml",
               purpose: "any"
             }
           ]

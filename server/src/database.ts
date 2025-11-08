@@ -17,6 +17,9 @@ export const db = knex({
 
 export async function setupDatabase() {
   try {
+    // Enable foreign keys before running migrations (as a backup)
+    await db.raw('PRAGMA foreign_keys = ON');
+    
     // Run any pending migrations
     await db.migrate.latest();
     console.log('✅ Database migrations completed');

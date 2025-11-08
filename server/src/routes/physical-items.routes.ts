@@ -36,7 +36,7 @@ interface PhysicalItemWithMedia extends PhysicalItem {
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { format, sort_by = 'created_at', sort_order = 'desc', search, page = '1', limit = '24' } = req.query;
+    const { format, genres, decades, sort_by = 'created_at', sort_order = 'desc', search, page = '1', limit = '24' } = req.query;
 
     // Start with base query with joins for media and series data
     let query = db('physical_items')
@@ -57,9 +57,70 @@ router.get('/', async (req: Request, res: Response) => {
       )
       .groupBy('physical_items.id');
 
-    // Filter by format if specified
+    // Filter by format if specified (support multi-select: comma-separated)
     if (format && format !== 'all') {
-      query = query.where('physical_items.physical_format', 'like', `%"${format}"%`);
+      const formats = typeof format === 'string' ? format.split(',').map(f => String(f).trim()) : [String(format)];
+      if (formats.length > 0) {
+        query = query.where(function() {
+          formats.forEach((f: string, index: number) => {
+            if (index === 0) {
+              this.where('physical_items.physical_format', 'like', `%"${f}"%`);
+            } else {
+              this.orWhere('physical_items.physical_format', 'like', `%"${f}"%`);
+            }
+          });
+        });
+      }
+    }
+
+    // Filter by genres if specified (multi-select: comma-separated genre IDs)
+    if (genres && typeof genres === 'string') {
+      const genreIds = genres.split(',').map(g => parseInt(g.trim())).filter(id => !isNaN(id));
+      if (genreIds.length > 0) {
+        query = query.where(function() {
+          genreIds.forEach((genreId: number, index: number) => {
+            if (index === 0) {
+              this.whereRaw(`EXISTS (
+                SELECT 1 FROM json_each(media.genres) 
+                WHERE json_extract(json_each.value, '$.id') = ?
+              )`, [genreId]);
+            } else {
+              this.orWhereRaw(`EXISTS (
+                SELECT 1 FROM json_each(media.genres) 
+                WHERE json_extract(json_each.value, '$.id') = ?
+              )`, [genreId]);
+            }
+          });
+        });
+      }
+    }
+
+    // Filter by decades if specified (multi-select: comma-separated decade strings like "1990,2000")
+    if (decades && typeof decades === 'string') {
+      const decadeStrings = decades.split(',').map(d => d.trim()).filter(d => d.length > 0);
+      if (decadeStrings.length > 0) {
+        query = query.where(function() {
+          decadeStrings.forEach((decadeStr: string, index: number) => {
+            // Extract decade number (e.g., "1990" or "1990s" -> 1990)
+            const decadeNum = parseInt(decadeStr.replace(/s$/, ''));
+            if (!isNaN(decadeNum)) {
+              const startYear = decadeNum;
+              const endYear = decadeNum + 9;
+              if (index === 0) {
+                this.whereRaw(`(
+                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ? AND 
+                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
+                )`, [startYear, endYear]);
+              } else {
+                this.orWhereRaw(`(
+                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ? AND 
+                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
+                )`, [startYear, endYear]);
+              }
+            }
+          });
+        });
+      }
     }
 
     // Search functionality
@@ -116,7 +177,67 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Apply the same filters as the main query
     if (format && format !== 'all') {
-      countQuery = countQuery.where('physical_items.physical_format', 'like', `%"${format}"%`);
+      const formats = typeof format === 'string' ? format.split(',').map(f => String(f).trim()) : [String(format)];
+      if (formats.length > 0) {
+        countQuery = countQuery.where(function() {
+          formats.forEach((f: string, index: number) => {
+            if (index === 0) {
+              this.where('physical_items.physical_format', 'like', `%"${f}"%`);
+            } else {
+              this.orWhere('physical_items.physical_format', 'like', `%"${f}"%`);
+            }
+          });
+        });
+      }
+    }
+
+    // Filter by genres in count query
+    if (genres && typeof genres === 'string') {
+      const genreIds = genres.split(',').map(g => parseInt(g.trim())).filter(id => !isNaN(id));
+      if (genreIds.length > 0) {
+        countQuery = countQuery.where(function() {
+          genreIds.forEach((genreId: number, index: number) => {
+            if (index === 0) {
+              this.whereRaw(`EXISTS (
+                SELECT 1 FROM json_each(media.genres) 
+                WHERE json_extract(json_each.value, '$.id') = ?
+              )`, [genreId]);
+            } else {
+              this.orWhereRaw(`EXISTS (
+                SELECT 1 FROM json_each(media.genres) 
+                WHERE json_extract(json_each.value, '$.id') = ?
+              )`, [genreId]);
+            }
+          });
+        });
+      }
+    }
+
+    // Filter by decades in count query
+    if (decades && typeof decades === 'string') {
+      const decadeStrings = decades.split(',').map(d => d.trim()).filter(d => d.length > 0);
+      if (decadeStrings.length > 0) {
+        countQuery = countQuery.where(function() {
+          decadeStrings.forEach((decadeStr: string, index: number) => {
+            const decadeNum = parseInt(decadeStr.replace(/s$/, ''));
+            if (!isNaN(decadeNum)) {
+              const startYear = decadeNum;
+              const endYear = decadeNum + 9;
+              if (index === 0) {
+                this.whereRaw(`(
+                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ? AND 
+                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
+                )`, [startYear, endYear]);
+              } else {
+                this.orWhereRaw(`(
+                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ? AND 
+                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
+                )`, [startYear, endYear]);
+              }
+            }
+          });
+        });
+      }
     }
 
     if (search && typeof search === 'string' && search.trim() !== '') {
@@ -164,6 +285,7 @@ router.get('/', async (req: Request, res: Response) => {
         const media = linkedMedia.map(m => ({
           ...m,
           cast: m.cast ? JSON.parse(m.cast) : [],
+          genres: m.genres ? JSON.parse(m.genres) : [],
           formats: m.formats ? JSON.parse(m.formats) : [],
         }));
 
@@ -233,6 +355,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const media = linkedMedia.map(m => ({
       ...m,
       cast: m.cast ? JSON.parse(m.cast) : [],
+      genres: m.genres ? JSON.parse(m.genres) : [],
       formats: m.formats ? JSON.parse(m.formats) : [],
     }));
 
@@ -740,8 +863,8 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'At least one item is required' });
     }
 
-    if (items.length > 50) {
-      return res.status(400).json({ error: 'Maximum 50 items allowed per request' });
+    if (items.length > 200) {
+      return res.status(400).json({ error: 'Maximum 200 items allowed per request' });
     }
 
     const results = await Promise.allSettled(

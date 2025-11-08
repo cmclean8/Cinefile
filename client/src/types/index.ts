@@ -27,6 +27,7 @@ export interface Media {
   release_date?: string;
   director?: string;
   cast?: string[];
+  genres?: { id: number; name: string }[];
   series?: Series[];
   created_at?: string;
   updated_at?: string;
@@ -159,7 +160,9 @@ export type SortField = 'title' | 'release_date' | 'created_at' | 'physical_form
 export type SortOrder = 'asc' | 'desc';
 
 export interface FilterOptions {
-  format?: PhysicalFormat;
+  format?: PhysicalFormat | PhysicalFormat[]; // Support multi-select
+  genres?: number[]; // Array of genre IDs for multi-select
+  decades?: string[]; // Array of decade strings like ["1990", "2000"] for multi-select
   sort_by?: SortField;
   sort_order?: SortOrder;
   search?: string;
@@ -177,6 +180,7 @@ export interface BulkSearchMatch {
 export interface BulkSearchUnmatched {
   originalTitle: string;
   error: string;
+  wasRetried?: boolean;
 }
 
 export interface BulkSearchResponse {
@@ -186,6 +190,7 @@ export interface BulkSearchResponse {
     total: number;
     matched: number;
     unmatched: number;
+    retried?: number;
   };
 }
 

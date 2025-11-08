@@ -143,6 +143,23 @@ const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ physicalItem, isOpe
                         )}
                       </div>
 
+                      {/* Genres */}
+                      {physicalItem.media[0].genres && physicalItem.media[0].genres.length > 0 && (
+                        <div>
+                          <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Genres</h5>
+                          <div className="flex flex-wrap gap-2">
+                            {physicalItem.media[0].genres.map((genre) => (
+                              <span
+                                key={genre.id}
+                                className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
+                              >
+                                {genre.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Per-Movie Formats */}
                       <div>
                         <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Formats for this movie</h5>
@@ -220,6 +237,23 @@ const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ physicalItem, isOpe
                                   </p>
                                 )}
                               </div>
+
+                              {/* Genres */}
+                              {movie.genres && movie.genres.length > 0 && (
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Genres</h5>
+                                  <div className="flex flex-wrap gap-2">
+                                    {movie.genres.map((genre) => (
+                                      <span
+                                        key={genre.id}
+                                        className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
+                                      >
+                                        {genre.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
 
                               {/* Per-Movie Formats */}
                               <div>

@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import Logo from '../components/Logo';
 import { PhysicalItem, SortField, SortOrder } from '../types';
 import { apiService } from '../services/api.service';
 import MediaForm from '../components/MediaForm';
 import SeriesManager from '../components/SeriesManager';
 import BulkAddForm from '../components/BulkAddForm';
+import AdminConsole from '../components/AdminConsole';
 
-type AdminTab = 'media' | 'series' | 'settings';
+type AdminTab = 'media' | 'series' | 'settings' | 'console';
 
 const AdminPage: React.FC = () => {
   const { isAuthenticated, login, logout } = useAuth();
@@ -230,8 +232,7 @@ const AdminPage: React.FC = () => {
           <div className="card">
             <div className="text-center mb-6">
               <div className="flex flex-col items-center mb-4">
-                <img src="/icon-32.png" alt="Cinefile" className="w-20 h-20 mb-4 dark:hidden" />
-                <img src="/icon-32-dark.png" alt="Cinefile" className="w-20 h-20 mb-4 hidden dark:block" />
+                <Logo size="xl" className="mb-4" />
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Admin Login</h1>
                 <p className="text-gray-600 dark:text-gray-300">Enter your admin password to continue</p>
               </div>
@@ -338,6 +339,16 @@ const AdminPage: React.FC = () => {
           }`}
         >
           Settings
+        </button>
+        <button
+          onClick={() => setActiveTab('console')}
+          className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
+            activeTab === 'console'
+              ? 'border-primary-600 text-primary-600'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          Console
         </button>
       </div>
 
@@ -738,6 +749,11 @@ const AdminPage: React.FC = () => {
           </div>
 
         </div>
+      )}
+
+      {/* Console Tab */}
+      {activeTab === 'console' && (
+        <AdminConsole />
       )}
     </div>
   );
