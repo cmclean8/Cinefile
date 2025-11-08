@@ -72,8 +72,16 @@ class ApiService {
   }
 
   // Media methods
-  async getMedia(filters?: Partial<FilterOptions>): Promise<Media[]> {
-    const response = await this.api.get<Media[]>('/media', { params: filters });
+  async getMedia(filters?: Partial<FilterOptions>): Promise<{ items: Media[]; pagination: any }> {
+    const params: any = {};
+    if (filters) {
+      if (filters.sort_by) params.sort_by = filters.sort_by;
+      if (filters.sort_order) params.sort_order = filters.sort_order;
+      if (filters.search) params.search = filters.search;
+      if (filters.page) params.page = filters.page;
+      if (filters.limit) params.limit = filters.limit;
+    }
+    const response = await this.api.get<{ items: Media[]; pagination: any }>('/media', { params });
     return response.data;
   }
 

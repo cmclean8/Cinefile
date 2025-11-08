@@ -255,9 +255,9 @@ router.get('/', async (req: Request, res: Response) => {
     const totalCount = await countQuery.countDistinct('physical_items.id as count').first();
     const total = totalCount ? parseInt(totalCount.count as string) : 0;
 
-    // Calculate pagination
-    const pageNum = parseInt(page as string, 10);
-    const limitNum = parseInt(limit as string, 10);
+    // Calculate pagination with limits
+    const pageNum = Math.max(parseInt(page as string, 10) || 1, 1); // Minimum 1
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 24, 1), 100); // Between 1 and 100
     const offset = (pageNum - 1) * limitNum;
     const totalPages = Math.ceil(total / limitNum);
 
@@ -266,46 +266,70 @@ router.get('/', async (req: Request, res: Response) => {
 
     const physicalItems = await query;
 
-    // Get linked media for each physical item
-    const physicalItemsWithMedia: PhysicalItemWithMedia[] = await Promise.all(
-      physicalItems.map(async (item) => {
-        const linkedMedia = await db('physical_item_media')
-          .join('media', 'physical_item_media.media_id', 'media.id')
-          .where('physical_item_media.physical_item_id', item.id)
-          .select(
-            'media.*',
-            'physical_item_media.disc_number',
-            'physical_item_media.formats'
-          );
+    // Get all physical item IDs for batch fetching media
+    const itemIds = physicalItems.map(item => item.id);
+    
+    // Fetch all linked media for all physical items in a single query (eliminates N+1 problem)
+    const allLinkedMedia = itemIds.length > 0 ? await db('physical_item_media')
+      .join('media', 'physical_item_media.media_id', 'media.id')
+      .whereIn('physical_item_media.physical_item_id', itemIds)
+      .select(
+        'physical_item_media.physical_item_id',
+        'media.*',
+        'physical_item_media.disc_number',
+        'physical_item_media.formats'
+      )
+      .orderBy('physical_item_media.physical_item_id')
+      .orderBy('physical_item_media.disc_number') : [];
 
-        // Parse JSON fields
-        const media = linkedMedia.map(m => ({
-          ...m,
-          cast: m.cast ? JSON.parse(m.cast) : [],
-          genres: m.genres ? JSON.parse(m.genres) : [],
-          formats: m.formats ? JSON.parse(m.formats) : [],
-        }));
+    // Group media by physical_item_id for efficient lookup
+    const mediaByItemId = new Map<number, any[]>();
+    allLinkedMedia.forEach((mediaItem: any) => {
+      const itemId = mediaItem.physical_item_id;
+      if (!mediaByItemId.has(itemId)) {
+        mediaByItemId.set(itemId, []);
+      }
+      mediaByItemId.get(itemId)!.push(mediaItem);
+    });
 
-        // Clean up the aggregated fields from the main query
-        const cleanedItem = {
-          ...item,
-          physical_format: JSON.parse(item.physical_format),
-          store_links: item.store_links ? JSON.parse(item.store_links) : [],
-          media,
-          // Remove aggregated fields that are not needed in response
-          media_ids: undefined,
-          media_titles: undefined,
-          media_directors: undefined,
-          media_release_dates: undefined,
-          earliest_release_date: undefined,
-          series_ids: undefined,
-          series_names: undefined,
-          series_sort_names: undefined,
-        };
+    // Build response with media grouped by physical item
+    const physicalItemsWithMedia: PhysicalItemWithMedia[] = physicalItems.map((item) => {
+      const linkedMedia = mediaByItemId.get(item.id) || [];
+      
+      // Parse JSON fields
+      const media = linkedMedia.map(m => ({
+        id: m.id,
+        title: m.title,
+        tmdb_id: m.tmdb_id,
+        synopsis: m.synopsis,
+        cover_art_url: m.cover_art_url,
+        release_date: m.release_date,
+        director: m.director,
+        disc_number: m.disc_number,
+        formats: m.formats ? JSON.parse(m.formats) : [],
+        cast: m.cast ? JSON.parse(m.cast) : [],
+        genres: m.genres ? JSON.parse(m.genres) : [],
+      }));
 
-        return cleanedItem;
-      })
-    );
+      // Clean up the aggregated fields from the main query
+      const cleanedItem = {
+        ...item,
+        physical_format: JSON.parse(item.physical_format),
+        store_links: item.store_links ? JSON.parse(item.store_links) : [],
+        media,
+        // Remove aggregated fields that are not needed in response
+        media_ids: undefined,
+        media_titles: undefined,
+        media_directors: undefined,
+        media_release_dates: undefined,
+        earliest_release_date: undefined,
+        series_ids: undefined,
+        series_names: undefined,
+        series_sort_names: undefined,
+      };
+
+      return cleanedItem;
+    });
 
     res.json({
       items: physicalItemsWithMedia,

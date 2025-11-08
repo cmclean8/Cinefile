@@ -62,8 +62,8 @@ const UnifiedSearchModal: React.FC<UnifiedSearchModalProps> = ({
 
   const loadAllMovies = async () => {
     try {
-      const movies = await apiService.getMedia();
-      setAllMovies(movies);
+      const response = await apiService.getMedia();
+      setAllMovies(response.items);
     } catch (error) {
       console.error('Failed to load movies:', error);
     }

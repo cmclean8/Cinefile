@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Media, SortField, SortOrder } from '../types';
 import { apiService } from '../services/api.service';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +17,12 @@ const MoviesPage: React.FC = () => {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showBulkMetadata, setShowBulkMetadata] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Debounce search query to prevent API calls on every keystroke
   useEffect(() => {
@@ -29,25 +35,69 @@ const MoviesPage: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      loadMovies();
+      loadInitialData();
     }
   }, [isAuthenticated, sortBy, sortOrder, debouncedSearchQuery]);
 
-  const loadMovies = async () => {
+  const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      const data = await apiService.getMedia({
+      const response = await apiService.getMedia({
         sort_by: sortBy,
         sort_order: sortOrder,
         search: debouncedSearchQuery || undefined,
+        page: 1,
+        limit: 100,
       });
-      setMovies(data);
+      setMovies(response.items);
+      setCurrentPage(1);
+      setHasMore(response.pagination.hasNext);
+      setTotalCount(response.pagination.total);
     } catch (error) {
       console.error('Failed to load movies:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const loadMoreMovies = useCallback(async () => {
+    if (isLoadingMore || !hasMore) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const response = await apiService.getMedia({
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        search: debouncedSearchQuery || undefined,
+        page: nextPage,
+        limit: 100,
+      });
+      
+      setMovies(prev => [...prev, ...response.items]);
+      setCurrentPage(nextPage);
+      setHasMore(response.pagination.hasNext);
+    } catch (error) {
+      console.error('Failed to load more movies:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMore, currentPage, sortBy, sortOrder, debouncedSearchQuery]);
+
+  // Infinite scroll handler
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerHeight + document.documentElement.scrollTop !== document.documentElement.offsetHeight) {
+        return;
+      }
+      if (!isLoadingMore && hasMore) {
+        loadMoreMovies();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isLoadingMore, hasMore, loadMoreMovies]);
 
   const handleSortChange = (newSortBy: SortField) => {
     if (newSortBy === sortBy) {
@@ -132,7 +182,7 @@ const MoviesPage: React.FC = () => {
               Movies Management
             </h1>
             <p className="text-gray-600 dark:text-gray-300">
-              {movies.length} {movies.length === 1 ? 'movie' : 'movies'} in your collection
+              {totalCount > 0 ? `${totalCount.toLocaleString()} ${totalCount === 1 ? 'movie' : 'movies'} in your collection` : 'Loading...'}
             </p>
           </div>
           <button
@@ -148,9 +198,9 @@ const MoviesPage: React.FC = () => {
       {showBulkMetadata && (
         <div className="mb-6">
           <BulkMetadataOperation
-            onComplete={() => {
-              loadMovies();
-            }}
+          onComplete={() => {
+            loadInitialData();
+          }}
           />
         </div>
       )}
@@ -402,6 +452,16 @@ const MoviesPage: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      
+      {/* Loading more indicator */}
+      {isLoadingMore && (
+        <div className="flex justify-center py-8">
+          <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600"></div>
+            Loading more movies...
+          </div>
         </div>
       )}
 

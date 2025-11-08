@@ -20,11 +20,11 @@ interface MediaItem {
 
 /**
  * GET /api/media
- * Get all media items with optional filtering and sorting
+ * Get all media items with optional filtering, sorting, and pagination
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { format, sort_by = 'created_at', sort_order = 'desc', search } = req.query;
+    const { format, sort_by = 'created_at', sort_order = 'desc', search, page = '1', limit = '100' } = req.query;
 
     // Start with base query
     let query = db('media')
@@ -80,6 +80,38 @@ router.get('/', async (req: Request, res: Response) => {
       query = query.orderBy(sortColumn, sortDirection);
     }
 
+    // Get total count for pagination
+    let countQuery = db('media')
+      .leftJoin('movie_series', 'media.id', 'movie_series.media_id')
+      .leftJoin('series', 'movie_series.series_id', 'series.id')
+      .groupBy('media.id');
+
+    // Apply same search filters to count query
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const searchTerm = `%${search.trim()}%`;
+      countQuery = countQuery.where(function() {
+        this.where('media.title', 'like', searchTerm)
+          .orWhere('media.director', 'like', searchTerm)
+          .orWhere('media.synopsis', 'like', searchTerm)
+          .orWhereRaw(`EXISTS (
+            SELECT 1 FROM json_each(media.cast) 
+            WHERE json_each.value LIKE ?
+          )`, [searchTerm]);
+      });
+    }
+
+    const totalCount = await countQuery.countDistinct('media.id as count').first();
+    const total = totalCount ? parseInt(totalCount.count as string) : 0;
+
+    // Calculate pagination with limits
+    const pageNum = Math.max(parseInt(page as string, 10) || 1, 1); // Minimum 1
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 200); // Between 1 and 200
+    const offset = (pageNum - 1) * limitNum;
+    const totalPages = Math.ceil(total / limitNum);
+
+    // Apply pagination
+    query = query.limit(limitNum).offset(offset);
+
     const media = await query;
 
     // Parse cast JSON strings and series data
@@ -106,7 +138,17 @@ router.get('/', async (req: Request, res: Response) => {
       };
     });
 
-    res.json(mediaWithParsedData);
+    res.json({
+      items: mediaWithParsedData,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages,
+        hasNext: pageNum < totalPages,
+        hasPrev: pageNum > 1,
+      },
+    });
   } catch (error) {
     console.error('Error fetching media:', error);
     res.status(500).json({ error: 'Failed to fetch media items' });

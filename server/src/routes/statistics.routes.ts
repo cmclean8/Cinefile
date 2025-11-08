@@ -5,21 +5,21 @@ const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Get total physical items
+    // Get total physical items - single COUNT query
     const totalPhysicalItems = await db('physical_items').count('* as count').first();
     
-    // Get total movies (only count movies that are owned - linked to physical items)
+    // Get total movies (only count movies that are owned - linked to physical items) - single COUNT DISTINCT query
     const totalMovies = await db('physical_item_media')
       .countDistinct('media_id as count')
       .first();
     
-    // Count movies by format - count each movie's formats
-    // Get all physical items with their media counts and formats
-    const physicalItemsWithMedia = await db('physical_items')
+    // Count movies by format using SQL aggregation instead of loading all rows
+    // This query groups by physical item and counts media, then aggregates formats
+    const formatStats = await db('physical_items')
       .leftJoin('physical_item_media', 'physical_items.id', 'physical_item_media.physical_item_id')
       .select(
         'physical_items.physical_format',
-        db.raw('COUNT(physical_item_media.media_id) as movie_count')
+        db.raw('COUNT(DISTINCT physical_item_media.media_id) as movie_count')
       )
       .groupBy('physical_items.id', 'physical_items.physical_format');
     
@@ -31,16 +31,21 @@ router.get('/', async (req: Request, res: Response) => {
       'VHS': 0
     };
     
-    physicalItemsWithMedia.forEach(item => {
+    // Process format statistics (much more efficient than loading all items)
+    formatStats.forEach(item => {
       if (item.physical_format) {
-        const formats = JSON.parse(item.physical_format);
-        const movieCount = parseInt(item.movie_count as string) || 1;
-        
-        formats.forEach((format: string) => {
-          if (formatCounts[format] !== undefined) {
-            formatCounts[format] += movieCount;
-          }
-        });
+        try {
+          const formats = JSON.parse(item.physical_format);
+          const movieCount = parseInt(item.movie_count as string) || 1;
+          
+          formats.forEach((format: string) => {
+            if (formatCounts[format] !== undefined) {
+              formatCounts[format] += movieCount;
+            }
+          });
+        } catch (e) {
+          // Skip invalid JSON
+        }
       }
     });
     
