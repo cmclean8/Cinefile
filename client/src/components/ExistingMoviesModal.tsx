@@ -51,7 +51,8 @@ const ExistingMoviesModal: React.FC<ExistingMoviesModalProps> = ({
   const loadMovies = async () => {
     setIsLoading(true);
     try {
-      const response = await apiService.getMedia();
+      // Load all movies by requesting a high limit
+      const response = await apiService.getMedia({ limit: 10000 });
       setMovies(response.items);
     } catch (error) {
       console.error('Failed to load movies:', error);

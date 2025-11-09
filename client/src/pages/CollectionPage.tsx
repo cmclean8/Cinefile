@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PhysicalItem, PhysicalFormat, SortField, SortOrder, CollectionStatistics as Stats } from '../types';
 import { apiService } from '../services/api.service';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +8,7 @@ import FilterBar from '../components/FilterBar';
 import MediaDetailModal from '../components/MediaDetailModal';
 import MediaForm from '../components/MediaForm';
 import CollectionStatistics from '../components/CollectionStatistics';
+import StickyHeader from '../components/StickyHeader';
 
 const SESSION_SORT_BY_KEY = 'collection_sort_by';
 const SESSION_SORT_ORDER_KEY = 'collection_sort_order';
@@ -47,6 +48,12 @@ const CollectionPage: React.FC = () => {
   // Statistics state
   const [statistics, setStatistics] = useState<Stats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  
+  // Scroll detection state
+  const [isScrolled, setIsScrolled] = useState(false);
+  
+  // Ref for canceling in-flight statistics requests
+  const statsAbortControllerRef = useRef<AbortController | null>(null);
 
   // Initialize sort preferences and collection title
   useEffect(() => {
@@ -98,21 +105,58 @@ const CollectionPage: React.FC = () => {
     }
   }, [format, selectedGenres, selectedDecades, sortBy, sortOrder, debouncedSearchQuery, isInitialized]);
 
-  // Load statistics on mount
+  // Load statistics on mount and when filters change (debounced)
   useEffect(() => {
+    // Cancel any in-flight request
+    if (statsAbortControllerRef.current) {
+      statsAbortControllerRef.current.abort();
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController();
+    statsAbortControllerRef.current = abortController;
+
     const loadStatistics = async () => {
+      setIsLoadingStats(true);
       try {
-        const stats = await apiService.getStatistics();
-        setStatistics(stats);
-      } catch (error) {
-        console.error('Failed to load statistics:', error);
+        // Prepare filter values
+        const formatValue: PhysicalFormat | PhysicalFormat[] | undefined = Array.isArray(format) 
+          ? (format.length === 0 ? undefined : format)
+          : (format === 'all' ? undefined : format);
+        
+        const stats = await apiService.getStatistics({
+          format: formatValue,
+          genres: selectedGenres.length > 0 ? selectedGenres : undefined,
+          decades: selectedDecades.length > 0 ? selectedDecades : undefined,
+          search: debouncedSearchQuery || undefined,
+        });
+        
+        // Only update if request wasn't aborted
+        if (!abortController.signal.aborted) {
+          setStatistics(stats);
+        }
+      } catch (error: any) {
+        // Ignore abort errors
+        if (error.name !== 'AbortError' && !abortController.signal.aborted) {
+          console.error('Failed to load statistics:', error);
+        }
       } finally {
-        setIsLoadingStats(false);
+        if (!abortController.signal.aborted) {
+          setIsLoadingStats(false);
+        }
       }
     };
 
-    loadStatistics();
-  }, []); // Load once on mount
+    // Debounce statistics loading
+    const timeoutId = setTimeout(() => {
+      loadStatistics();
+    }, 400); // 400ms delay
+
+    return () => {
+      clearTimeout(timeoutId);
+      abortController.abort();
+    };
+  }, [format, selectedGenres, selectedDecades, debouncedSearchQuery]);
 
   const loadInitialData = async () => {
     setIsLoading(true);
@@ -252,11 +296,39 @@ const CollectionPage: React.FC = () => {
   };
 
   const refreshStatistics = async () => {
+    // Cancel any in-flight request
+    if (statsAbortControllerRef.current) {
+      statsAbortControllerRef.current.abort();
+    }
+
+    const abortController = new AbortController();
+    statsAbortControllerRef.current = abortController;
+
     try {
-      const stats = await apiService.getStatistics();
-      setStatistics(stats);
-    } catch (error) {
-      console.error('Failed to refresh statistics:', error);
+      setIsLoadingStats(true);
+      // Prepare filter values
+      const formatValue: PhysicalFormat | PhysicalFormat[] | undefined = Array.isArray(format) 
+        ? (format.length === 0 ? undefined : format)
+        : (format === 'all' ? undefined : format);
+      
+      const stats = await apiService.getStatistics({
+        format: formatValue,
+        genres: selectedGenres.length > 0 ? selectedGenres : undefined,
+        decades: selectedDecades.length > 0 ? selectedDecades : undefined,
+        search: debouncedSearchQuery || undefined,
+      });
+      
+      if (!abortController.signal.aborted) {
+        setStatistics(stats);
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError' && !abortController.signal.aborted) {
+        console.error('Failed to refresh statistics:', error);
+      }
+    } finally {
+      if (!abortController.signal.aborted) {
+        setIsLoadingStats(false);
+      }
     }
   };
 
@@ -266,6 +338,34 @@ const CollectionPage: React.FC = () => {
     loadInitialData(); // Reload data to show changes
     refreshStatistics(); // Refresh statistics
   };
+
+  // Scroll detection for sticky header
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollThreshold = 100; // Start sticking after 100px scroll
+      setIsScrolled(window.scrollY > scrollThreshold);
+    };
+
+    // Throttle scroll events - runs immediately and then at most every 16ms
+    let isThrottled = false;
+    const throttledHandleScroll = () => {
+      if (!isThrottled) {
+        handleScroll();
+        isThrottled = true;
+        setTimeout(() => {
+          isThrottled = false;
+        }, 16); // ~60fps
+      }
+    };
+
+    window.addEventListener('scroll', throttledHandleScroll);
+    // Check initial scroll position
+    handleScroll();
+    
+    return () => {
+      window.removeEventListener('scroll', throttledHandleScroll);
+    };
+  }, []);
 
   // Infinite scroll effect
   useEffect(() => {
@@ -309,24 +409,44 @@ const CollectionPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Sticky Header - Only shows when scrolled */}
+      {isScrolled && (
+        <StickyHeader
+          statistics={statistics}
+          isLoadingStats={isLoadingStats}
+          searchQuery={searchQuery}
+          format={format}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          selectedGenres={selectedGenres}
+          selectedDecades={selectedDecades}
+          availableGenres={availableGenres}
+          availableDecades={availableDecades}
+          onSearchChange={handleSearchChange}
+          onFormatChange={setFormat}
+          onSortChange={handleSortChange}
+          onGenresChange={setSelectedGenres}
+          onDecadesChange={setSelectedDecades}
+          onClearFilters={handleClearFilters}
+        />
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{collectionTitle}</h1>
         </div>
-        <p className="text-gray-600 dark:text-gray-300">
-          {totalCount} {totalCount === 1 ? 'item' : 'items'} in your library
-        </p>
       </div>
 
       {/* Statistics */}
       {statistics && (
         <CollectionStatistics 
           statistics={statistics} 
-          isLoading={isLoadingStats} 
+          isLoading={isLoadingStats}
         />
       )}
 
+      {/* Filter Bar */}
       <FilterBar
         format={format}
         sortBy={sortBy}

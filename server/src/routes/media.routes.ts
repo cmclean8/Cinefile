@@ -30,6 +30,7 @@ router.get('/', async (req: Request, res: Response) => {
     let query = db('media')
       .leftJoin('movie_series', 'media.id', 'movie_series.media_id')
       .leftJoin('series', 'movie_series.series_id', 'series.id')
+      .leftJoin('series as primary_series', 'media.primary_series_id', 'primary_series.id')
       .select(
         'media.*',
         db.raw('GROUP_CONCAT(DISTINCT series.id) as series_ids'),
@@ -63,8 +64,21 @@ router.get('/', async (req: Request, res: Response) => {
     const sortDirection = sort_order === 'asc' ? 'asc' : 'desc';
     
     if (sort_by === 'series_sort') {
-      // Sort by series sort name OR title (intermixed alphabetically)
-      query = query.orderByRaw(`COALESCE(series.sort_name, media.title) ${sortDirection.toUpperCase()}`);
+      // Sort by primary series sort name if set, otherwise first series sort name, otherwise title
+      // Use a subquery to get the first series sort_name deterministically
+      // Then sort by release_date within the same series to group movies chronologically
+      // Handle NULL release_date by using a large date for sorting
+      query = query.orderByRaw(`
+        COALESCE(
+          primary_series.sort_name,
+          (SELECT MIN(series.sort_name) 
+           FROM movie_series ms 
+           JOIN series s ON ms.series_id = s.id 
+           WHERE ms.media_id = media.id),
+          media.title
+        ) ${sortDirection.toUpperCase()},
+        COALESCE(media.release_date, '9999-12-31') ${sortDirection.toUpperCase()}
+      `);
     } else if (sort_by === 'director_last_name') {
       // Extract last name from director field and sort by it
       query = query.orderByRaw(`
@@ -105,7 +119,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Calculate pagination with limits
     const pageNum = Math.max(parseInt(page as string, 10) || 1, 1); // Minimum 1
-    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 200); // Between 1 and 200
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 10000); // Between 1 and 10000
     const offset = (pageNum - 1) * limitNum;
     const totalPages = Math.ceil(total / limitNum);
 
@@ -175,6 +189,14 @@ router.get('/:id', async (req: Request, res: Response) => {
     if (media.genres) {
       media.genres = JSON.parse(media.genres);
     }
+
+    // Fetch series data
+    const seriesData = await db('movie_series')
+      .join('series', 'movie_series.series_id', 'series.id')
+      .where('movie_series.media_id', id)
+      .select('series.*', 'movie_series.sort_order', 'movie_series.auto_sort');
+
+    media.series = seriesData;
 
     res.json(media);
   } catch (error) {
@@ -247,12 +269,33 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { series_associations, ...mediaData }: any = req.body;
+    const { series_associations, primary_series_id, ...mediaData }: any = req.body;
 
     // Check if media exists
     const existingMedia = await db('media').where({ id }).first();
     if (!existingMedia) {
       return res.status(404).json({ error: 'Media item not found' });
+    }
+
+    // Validate primary_series_id if provided
+    if (primary_series_id !== undefined && primary_series_id !== null) {
+      // Check if primary_series_id is in series_associations
+      if (series_associations && Array.isArray(series_associations)) {
+        const isInAssociations = series_associations.some(
+          (assoc: any) => assoc.series_id === primary_series_id
+        );
+        if (!isInAssociations) {
+          return res.status(400).json({ 
+            error: 'primary_series_id must be included in series_associations' 
+          });
+        }
+      }
+      
+      // Validate that the series exists
+      const seriesExists = await db('series').where({ id: primary_series_id }).first();
+      if (!seriesExists) {
+        return res.status(400).json({ error: 'Primary series not found' });
+      }
     }
 
     // Validate and convert physical_format to JSON array if provided
@@ -297,10 +340,17 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
     delete (mediaData as any).created_at;
     delete (mediaData as any).updated_at;
 
-    await db('media').where({ id }).update({
+    // Prepare update data including primary_series_id
+    const updateData: any = {
       ...mediaData,
       updated_at: db.fn.now(),
-    });
+    };
+    
+    if (primary_series_id !== undefined) {
+      updateData.primary_series_id = primary_series_id || null;
+    }
+
+    await db('media').where({ id }).update(updateData);
 
     // Handle series associations update
     if (series_associations !== undefined) {
@@ -316,6 +366,30 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
           auto_sort: assoc.auto_sort !== undefined ? assoc.auto_sort : true,
         }));
         await db('movie_series').insert(associations);
+        
+        // Auto-set primary_series_id if there's exactly one series and none is set
+        if (series_associations.length === 1 && (primary_series_id === undefined || primary_series_id === null)) {
+          await db('media').where({ id }).update({ primary_series_id: series_associations[0].series_id });
+        }
+      }
+      
+      // If primary_series_id was removed from associations, clear it
+      if (primary_series_id !== undefined && primary_series_id !== null) {
+        if (!series_associations || !Array.isArray(series_associations) || 
+            !series_associations.some((assoc: any) => assoc.series_id === primary_series_id)) {
+          await db('media').where({ id }).update({ primary_series_id: null });
+        }
+      } else if (series_associations && Array.isArray(series_associations)) {
+        // If primary_series_id is not provided but associations are, check if current primary is still valid
+        const currentPrimary = existingMedia.primary_series_id;
+        if (currentPrimary && !series_associations.some((assoc: any) => assoc.series_id === currentPrimary)) {
+          await db('media').where({ id }).update({ primary_series_id: null });
+        }
+        
+        // Auto-set primary_series_id if there's exactly one series and none is set
+        if (series_associations.length === 1 && !currentPrimary) {
+          await db('media').where({ id }).update({ primary_series_id: series_associations[0].series_id });
+        }
       }
     }
 

@@ -9,6 +9,7 @@ interface Series {
   name: string;
   sort_name: string;
   tmdb_collection_id?: number;
+  internal_sort_method?: 'chronological' | 'custom' | 'alphabetical';
   created_at?: string;
   updated_at?: string;
 }
@@ -66,19 +67,39 @@ router.get('/:id/movies', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const movies = await db('media')
+    // Get series to check internal_sort_method
+    const series = await db('series').where({ id }).first();
+    if (!series) {
+      return res.status(404).json({ error: 'Series not found' });
+    }
+
+    const internalSortMethod = series.internal_sort_method || 'chronological';
+
+    let query = db('media')
       .join('movie_series', 'media.id', 'movie_series.media_id')
       .where('movie_series.series_id', id)
       .select(
         'media.*',
         'movie_series.sort_order',
         'movie_series.auto_sort'
-      )
-      .orderBy([
-        { column: 'movie_series.auto_sort', order: 'desc' },
-        { column: 'media.release_date', order: 'asc' },
-        { column: 'movie_series.sort_order', order: 'asc' }
+      );
+
+    // Apply sorting based on internal_sort_method
+    if (internalSortMethod === 'custom') {
+      // Custom: sort by sort_order, then release_date
+      query = query.orderBy([
+        { column: 'movie_series.sort_order', order: 'asc' },
+        { column: 'media.release_date', order: 'asc' }
       ]);
+    } else if (internalSortMethod === 'alphabetical') {
+      // Alphabetical: sort by title
+      query = query.orderBy('media.title', 'asc');
+    } else {
+      // Chronological: sort by release_date (default)
+      query = query.orderBy('media.release_date', 'asc');
+    }
+
+    const movies = await query;
 
     // Parse cast JSON strings
     const moviesWithParsedCast = movies.map((item) => ({
@@ -104,6 +125,11 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     // Validate required fields
     if (!seriesData.name || !seriesData.sort_name) {
       return res.status(400).json({ error: 'Name and sort_name are required' });
+    }
+
+    // Default internal_sort_method to 'chronological' if not provided
+    if (!seriesData.internal_sort_method) {
+      seriesData.internal_sort_method = 'chronological';
     }
 
     const [id] = await db('series').insert(seriesData);
@@ -171,6 +197,106 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error deleting series:', error);
     res.status(500).json({ error: 'Failed to delete series' });
+  }
+});
+
+/**
+ * POST /api/series/:id/movies/:mediaId/sort-order
+ * Update sort order for a specific movie in a series (protected)
+ */
+router.post('/:id/movies/:mediaId/sort-order', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id: seriesId, mediaId } = req.params;
+    const { sort_order } = req.body;
+
+    // Validate that the association exists
+    const association = await db('movie_series')
+      .where({ series_id: seriesId, media_id: mediaId })
+      .first();
+
+    if (!association) {
+      return res.status(404).json({ error: 'Movie is not associated with this series' });
+    }
+
+    // Update sort_order
+    await db('movie_series')
+      .where({ series_id: seriesId, media_id: mediaId })
+      .update({ 
+        sort_order: sort_order !== undefined ? parseInt(sort_order) : null,
+        updated_at: db.fn.now()
+      });
+
+    const updated = await db('movie_series')
+      .where({ series_id: seriesId, media_id: mediaId })
+      .first();
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating movie sort order:', error);
+    res.status(500).json({ error: 'Failed to update movie sort order' });
+  }
+});
+
+/**
+ * PUT /api/series/:id/movies/sort-orders
+ * Bulk update sort orders for multiple movies in a series (protected)
+ */
+router.put('/:id/movies/sort-orders', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id: seriesId } = req.params;
+    const { sort_orders } = req.body; // Array of {media_id, sort_order}
+
+    if (!Array.isArray(sort_orders)) {
+      return res.status(400).json({ error: 'sort_orders must be an array' });
+    }
+
+    // Validate series exists
+    const series = await db('series').where({ id: seriesId }).first();
+    if (!series) {
+      return res.status(404).json({ error: 'Series not found' });
+    }
+
+    // Update each sort order in a transaction
+    await db.transaction(async (trx) => {
+      for (const item of sort_orders) {
+        const { media_id, sort_order } = item;
+        
+        // Validate association exists
+        const association = await trx('movie_series')
+          .where({ series_id: seriesId, media_id })
+          .first();
+
+        if (association) {
+          await trx('movie_series')
+            .where({ series_id: seriesId, media_id })
+            .update({
+              sort_order: sort_order !== undefined ? parseInt(sort_order) : null,
+              updated_at: db.fn.now()
+            });
+        }
+      }
+    });
+
+    // Return updated movies
+    const movies = await db('media')
+      .join('movie_series', 'media.id', 'movie_series.media_id')
+      .where('movie_series.series_id', seriesId)
+      .select(
+        'media.*',
+        'movie_series.sort_order',
+        'movie_series.auto_sort'
+      )
+      .orderBy('movie_series.sort_order', 'asc');
+
+    const moviesWithParsedCast = movies.map((item) => ({
+      ...item,
+      cast: item.cast ? JSON.parse(item.cast) : [],
+    }));
+
+    res.json(moviesWithParsedCast);
+  } catch (error) {
+    console.error('Error bulk updating movie sort orders:', error);
+    res.status(500).json({ error: 'Failed to update movie sort orders' });
   }
 });
 

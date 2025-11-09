@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Series } from '../types';
+import { Series, Media } from '../types';
 import { apiService } from '../services/api.service';
 
 const SeriesManager: React.FC = () => {
@@ -7,11 +7,16 @@ const SeriesManager: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingSeries, setEditingSeries] = useState<Series | null>(null);
+  const [seriesMovies, setSeriesMovies] = useState<Media[]>([]);
+  const [isLoadingMovies, setIsLoadingMovies] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     sort_name: '',
     tmdb_collection_id: '',
+    internal_sort_method: 'chronological' as 'chronological' | 'custom' | 'alphabetical',
   });
+  const [sortOrders, setSortOrders] = useState<Record<number, number | null>>({});
+  const [hasSortOrderChanges, setHasSortOrderChanges] = useState(false);
 
   useEffect(() => {
     loadSeries();
@@ -38,17 +43,30 @@ const SeriesManager: React.FC = () => {
         name: formData.name,
         sort_name: formData.sort_name,
         tmdb_collection_id: formData.tmdb_collection_id ? parseInt(formData.tmdb_collection_id) : undefined,
+        internal_sort_method: formData.internal_sort_method,
       };
 
       if (editingSeries) {
         await apiService.updateSeries(editingSeries.id, data);
+        // Save sort orders if there are changes
+        if (hasSortOrderChanges && editingSeries) {
+          const sortOrdersArray = Object.entries(sortOrders).map(([mediaId, sortOrder]) => ({
+            media_id: parseInt(mediaId),
+            sort_order: sortOrder,
+          }));
+          await apiService.bulkUpdateSeriesMovieSortOrders(editingSeries.id, sortOrdersArray);
+          setHasSortOrderChanges(false);
+        }
       } else {
         await apiService.createSeries(data);
       }
 
-      setFormData({ name: '', sort_name: '', tmdb_collection_id: '' });
+      setFormData({ name: '', sort_name: '', tmdb_collection_id: '', internal_sort_method: 'chronological' });
       setEditingSeries(null);
       setShowAddForm(false);
+      setSeriesMovies([]);
+      setSortOrders({});
+      setHasSortOrderChanges(false);
       await loadSeries();
     } catch (error) {
       console.error('Failed to save series:', error);
@@ -56,14 +74,65 @@ const SeriesManager: React.FC = () => {
     }
   };
 
-  const handleEdit = (s: Series) => {
+  const handleEdit = async (s: Series) => {
     setEditingSeries(s);
     setFormData({
       name: s.name,
       sort_name: s.sort_name,
       tmdb_collection_id: s.tmdb_collection_id?.toString() || '',
+      internal_sort_method: s.internal_sort_method || 'chronological',
     });
     setShowAddForm(true);
+    
+    // Load movies for this series
+    setIsLoadingMovies(true);
+    try {
+      const movies = await apiService.getSeriesMovies(s.id);
+      setSeriesMovies(movies);
+      // Initialize sort orders from movies
+      const initialSortOrders: Record<number, number | null> = {};
+      movies.forEach(movie => {
+        const movieSeries = (movie as any).sort_order;
+        initialSortOrders[movie.id] = movieSeries !== undefined ? movieSeries : null;
+      });
+      setSortOrders(initialSortOrders);
+      setHasSortOrderChanges(false);
+    } catch (error) {
+      console.error('Failed to load series movies:', error);
+    } finally {
+      setIsLoadingMovies(false);
+    }
+  };
+
+  const handleSortOrderChange = (mediaId: number, value: string) => {
+    const numValue = value === '' ? null : parseInt(value);
+    if (isNaN(numValue as any) && numValue !== null) return;
+    
+    setSortOrders(prev => ({
+      ...prev,
+      [mediaId]: numValue,
+    }));
+    setHasSortOrderChanges(true);
+  };
+
+  const handleSaveSortOrders = async () => {
+    if (!editingSeries) return;
+    
+    try {
+      const sortOrdersArray = Object.entries(sortOrders).map(([mediaId, sortOrder]) => ({
+        media_id: parseInt(mediaId),
+        sort_order: sortOrder,
+      }));
+      await apiService.bulkUpdateSeriesMovieSortOrders(editingSeries.id, sortOrdersArray);
+      setHasSortOrderChanges(false);
+      // Reload movies to get updated order
+      const movies = await apiService.getSeriesMovies(editingSeries.id);
+      setSeriesMovies(movies);
+      alert('Sort orders saved successfully!');
+    } catch (error) {
+      console.error('Failed to save sort orders:', error);
+      alert('Failed to save sort orders. Please try again.');
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -79,9 +148,12 @@ const SeriesManager: React.FC = () => {
   };
 
   const handleCancel = () => {
-    setFormData({ name: '', sort_name: '', tmdb_collection_id: '' });
+    setFormData({ name: '', sort_name: '', tmdb_collection_id: '', internal_sort_method: 'chronological' });
     setEditingSeries(null);
     setShowAddForm(false);
+    setSeriesMovies([]);
+    setSortOrders({});
+    setHasSortOrderChanges(false);
   };
 
   if (isLoading) {
@@ -148,6 +220,83 @@ const SeriesManager: React.FC = () => {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Internal Sort Method *
+                <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                  (How movies within this series should be sorted)
+                </span>
+              </label>
+              <select
+                value={formData.internal_sort_method}
+                onChange={(e) => setFormData({ ...formData, internal_sort_method: e.target.value as 'chronological' | 'custom' | 'alphabetical' })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              >
+                <option value="chronological">Chronological (by release date)</option>
+                <option value="custom">Custom (by sort order number)</option>
+                <option value="alphabetical">Alphabetical (by title)</option>
+              </select>
+            </div>
+
+            {editingSeries && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100">Movies in Series</h4>
+                  {hasSortOrderChanges && formData.internal_sort_method === 'custom' && (
+                    <button
+                      type="button"
+                      onClick={handleSaveSortOrders}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
+                    >
+                      Save Sort Orders
+                    </button>
+                  )}
+                </div>
+                
+                {isLoadingMovies ? (
+                  <div className="text-center py-4 text-gray-600 dark:text-gray-400">Loading movies...</div>
+                ) : seriesMovies.length === 0 ? (
+                  <div className="text-center py-4 text-gray-600 dark:text-gray-400">No movies in this series yet.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {seriesMovies.map((movie) => (
+                      <div
+                        key={movie.id}
+                        className="flex items-center gap-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{movie.title}</div>
+                          {movie.release_date && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                              {new Date(movie.release_date).getFullYear()}
+                            </div>
+                          )}
+                        </div>
+                        {formData.internal_sort_method === 'custom' && (
+                          <div className="flex items-center gap-2">
+                            <label className="text-sm text-gray-700 dark:text-gray-300">Sort Order:</label>
+                            <input
+                              type="number"
+                              value={sortOrders[movie.id] ?? ''}
+                              onChange={(e) => handleSortOrderChange(movie.id, e.target.value)}
+                              className="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                              placeholder="Order"
+                            />
+                          </div>
+                        )}
+                        {formData.internal_sort_method !== 'custom' && (movie as any).sort_order !== undefined && (
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            Order: {(movie as any).sort_order ?? '—'}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button type="submit" className="btn-primary">
                 {editingSeries ? 'Update' : 'Create'} Series
@@ -175,6 +324,9 @@ const SeriesManager: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{s.name}</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Sort name: {s.sort_name}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Internal sort: {s.internal_sort_method === 'chronological' ? 'Chronological' : s.internal_sort_method === 'custom' ? 'Custom' : 'Alphabetical'}
+                  </p>
                   {s.tmdb_collection_id && (
                     <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                       TMDb Collection ID: {s.tmdb_collection_id}

@@ -12,6 +12,7 @@ interface PhysicalItem {
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: string; // JSON string of array
+  primary_series_id?: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -38,24 +39,10 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { format, genres, decades, sort_by = 'created_at', sort_order = 'desc', search, page = '1', limit = '24' } = req.query;
 
-    // Start with base query with joins for media and series data
+    // Start with base query - fetch physical items WITHOUT joins first
+    // This ensures all items are returned, then we'll filter and attach media separately
     let query = db('physical_items')
-      .leftJoin('physical_item_media', 'physical_items.id', 'physical_item_media.physical_item_id')
-      .leftJoin('media', 'physical_item_media.media_id', 'media.id')
-      .leftJoin('movie_series', 'media.id', 'movie_series.media_id')
-      .leftJoin('series', 'movie_series.series_id', 'series.id')
-      .select(
-        'physical_items.*',
-        db.raw('GROUP_CONCAT(DISTINCT media.id) as media_ids'),
-        db.raw('GROUP_CONCAT(DISTINCT media.title) as media_titles'),
-        db.raw('GROUP_CONCAT(DISTINCT media.director) as media_directors'),
-        db.raw('GROUP_CONCAT(DISTINCT media.release_date) as media_release_dates'),
-        db.raw('MIN(media.release_date) as earliest_release_date'),
-        db.raw('GROUP_CONCAT(DISTINCT series.id) as series_ids'),
-        db.raw('GROUP_CONCAT(DISTINCT series.name) as series_names'),
-        db.raw('GROUP_CONCAT(DISTINCT series.sort_name) as series_sort_names')
-      )
-      .groupBy('physical_items.id');
+      .select('physical_items.*');
 
     // Filter by format if specified (support multi-select: comma-separated)
     if (format && format !== 'all') {
@@ -81,13 +68,23 @@ router.get('/', async (req: Request, res: Response) => {
           genreIds.forEach((genreId: number, index: number) => {
             if (index === 0) {
               this.whereRaw(`EXISTS (
-                SELECT 1 FROM json_each(media.genres) 
-                WHERE json_extract(json_each.value, '$.id') = ?
+                SELECT 1 FROM physical_item_media
+                JOIN media ON physical_item_media.media_id = media.id
+                WHERE physical_item_media.physical_item_id = physical_items.id
+                AND EXISTS (
+                  SELECT 1 FROM json_each(media.genres) 
+                  WHERE json_extract(json_each.value, '$.id') = ?
+                )
               )`, [genreId]);
             } else {
               this.orWhereRaw(`EXISTS (
-                SELECT 1 FROM json_each(media.genres) 
-                WHERE json_extract(json_each.value, '$.id') = ?
+                SELECT 1 FROM physical_item_media
+                JOIN media ON physical_item_media.media_id = media.id
+                WHERE physical_item_media.physical_item_id = physical_items.id
+                AND EXISTS (
+                  SELECT 1 FROM json_each(media.genres) 
+                  WHERE json_extract(json_each.value, '$.id') = ?
+                )
               )`, [genreId]);
             }
           });
@@ -107,14 +104,22 @@ router.get('/', async (req: Request, res: Response) => {
               const startYear = decadeNum;
               const endYear = decadeNum + 9;
               if (index === 0) {
-                this.whereRaw(`(
-                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ? AND 
-                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
+                this.whereRaw(`EXISTS (
+                  SELECT 1 FROM physical_item_media
+                  JOIN media ON physical_item_media.media_id = media.id
+                  WHERE physical_item_media.physical_item_id = physical_items.id
+                  AND media.release_date IS NOT NULL
+                  AND CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ?
+                  AND CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
                 )`, [startYear, endYear]);
               } else {
-                this.orWhereRaw(`(
-                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ? AND 
-                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
+                this.orWhereRaw(`EXISTS (
+                  SELECT 1 FROM physical_item_media
+                  JOIN media ON physical_item_media.media_id = media.id
+                  WHERE physical_item_media.physical_item_id = physical_items.id
+                  AND media.release_date IS NOT NULL
+                  AND CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ?
+                  AND CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
                 )`, [startYear, endYear]);
               }
             }
@@ -128,38 +133,52 @@ router.get('/', async (req: Request, res: Response) => {
       const searchTerm = `%${search.trim()}%`;
       query = query.where(function() {
         this.where('physical_items.name', 'like', searchTerm)
-          .orWhere('media.title', 'like', searchTerm)
-          .orWhere('media.director', 'like', searchTerm)
-          .orWhere('media.synopsis', 'like', searchTerm)
           .orWhere('physical_items.edition_notes', 'like', searchTerm)
           .orWhereRaw(`EXISTS (
-            SELECT 1 FROM json_each(media.cast) 
-            WHERE json_each.value LIKE ?
-          )`, [searchTerm]);
+            SELECT 1 FROM physical_item_media
+            JOIN media ON physical_item_media.media_id = media.id
+            WHERE physical_item_media.physical_item_id = physical_items.id
+            AND (
+              media.title LIKE ? OR
+              media.director LIKE ? OR
+              media.synopsis LIKE ? OR
+              EXISTS (
+                SELECT 1 FROM json_each(media.cast) 
+                WHERE json_each.value LIKE ?
+              )
+            )
+          )`, [searchTerm, searchTerm, searchTerm, searchTerm]);
       });
     }
 
     // Apply sorting based on sort_by parameter
     const sortDirection = sort_order === 'asc' ? 'asc' : 'desc';
+    const isSeriesSort = sort_by === 'series_sort';
     
     if (sort_by === 'title') {
       // Sort by physical item name
       query = query.orderBy('physical_items.name', sortDirection);
-    } else if (sort_by === 'series_sort') {
-      // Sort by series sort name OR physical item name (intermixed alphabetically)
-      query = query.orderByRaw(`COALESCE(series.sort_name, physical_items.name) ${sortDirection.toUpperCase()}`);
+    } else if (isSeriesSort) {
+      // For series_sort, skip SQL-level sorting - will be handled after fetching series data
+      // No orderBy clause here
     } else if (sort_by === 'director_last_name') {
-      // Extract last name from first media's director field and sort by it
-      query = query.orderByRaw(`
-        CASE 
-          WHEN media.director IS NOT NULL AND media.director != '' 
-          THEN SUBSTR(media.director, INSTR(media.director, ' ') + 1)
-          ELSE media.director
-        END ${sortDirection.toUpperCase()} NULLS LAST
-      `);
+      // Sort by director - use subquery to get first media's director
+      query = query.orderByRaw(`(
+        SELECT SUBSTR(media.director, INSTR(media.director || ' ', ' ') + 1)
+        FROM physical_item_media
+        JOIN media ON physical_item_media.media_id = media.id
+        WHERE physical_item_media.physical_item_id = physical_items.id
+        AND media.director IS NOT NULL AND media.director != ''
+        LIMIT 1
+      ) ${sortDirection.toUpperCase()} NULLS LAST`);
     } else if (sort_by === 'release_date') {
       // Sort by earliest release date among linked media
-      query = query.orderByRaw(`MIN(media.release_date) ${sortDirection.toUpperCase()} NULLS LAST`);
+      query = query.orderByRaw(`(
+        SELECT MIN(media.release_date)
+        FROM physical_item_media
+        JOIN media ON physical_item_media.media_id = media.id
+        WHERE physical_item_media.physical_item_id = physical_items.id
+      ) ${sortDirection.toUpperCase()} NULLS LAST`);
     } else if (sort_by === 'physical_format') {
       // Sort by physical format
       query = query.orderBy('physical_items.physical_format', sortDirection);
@@ -168,12 +187,8 @@ router.get('/', async (req: Request, res: Response) => {
       query = query.orderBy('physical_items.created_at', sortDirection);
     }
 
-    // Get total count for pagination - create a separate query to avoid GROUP BY issues
-    let countQuery = db('physical_items')
-      .leftJoin('physical_item_media', 'physical_items.id', 'physical_item_media.physical_item_id')
-      .leftJoin('media', 'physical_item_media.media_id', 'media.id')
-      .leftJoin('movie_series', 'media.id', 'movie_series.media_id')
-      .leftJoin('series', 'movie_series.series_id', 'series.id');
+    // Get total count for pagination - use same filters but without joins
+    let countQuery = db('physical_items');
 
     // Apply the same filters as the main query
     if (format && format !== 'all') {
@@ -199,13 +214,23 @@ router.get('/', async (req: Request, res: Response) => {
           genreIds.forEach((genreId: number, index: number) => {
             if (index === 0) {
               this.whereRaw(`EXISTS (
-                SELECT 1 FROM json_each(media.genres) 
-                WHERE json_extract(json_each.value, '$.id') = ?
+                SELECT 1 FROM physical_item_media
+                JOIN media ON physical_item_media.media_id = media.id
+                WHERE physical_item_media.physical_item_id = physical_items.id
+                AND EXISTS (
+                  SELECT 1 FROM json_each(media.genres) 
+                  WHERE json_extract(json_each.value, '$.id') = ?
+                )
               )`, [genreId]);
             } else {
               this.orWhereRaw(`EXISTS (
-                SELECT 1 FROM json_each(media.genres) 
-                WHERE json_extract(json_each.value, '$.id') = ?
+                SELECT 1 FROM physical_item_media
+                JOIN media ON physical_item_media.media_id = media.id
+                WHERE physical_item_media.physical_item_id = physical_items.id
+                AND EXISTS (
+                  SELECT 1 FROM json_each(media.genres) 
+                  WHERE json_extract(json_each.value, '$.id') = ?
+                )
               )`, [genreId]);
             }
           });
@@ -224,14 +249,22 @@ router.get('/', async (req: Request, res: Response) => {
               const startYear = decadeNum;
               const endYear = decadeNum + 9;
               if (index === 0) {
-                this.whereRaw(`(
-                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ? AND 
-                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
+                this.whereRaw(`EXISTS (
+                  SELECT 1 FROM physical_item_media
+                  JOIN media ON physical_item_media.media_id = media.id
+                  WHERE physical_item_media.physical_item_id = physical_items.id
+                  AND media.release_date IS NOT NULL
+                  AND CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ?
+                  AND CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
                 )`, [startYear, endYear]);
               } else {
-                this.orWhereRaw(`(
-                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ? AND 
-                  CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
+                this.orWhereRaw(`EXISTS (
+                  SELECT 1 FROM physical_item_media
+                  JOIN media ON physical_item_media.media_id = media.id
+                  WHERE physical_item_media.physical_item_id = physical_items.id
+                  AND media.release_date IS NOT NULL
+                  AND CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) >= ?
+                  AND CAST(SUBSTR(media.release_date, 1, 4) AS INTEGER) <= ?
                 )`, [startYear, endYear]);
               }
             }
@@ -244,18 +277,25 @@ router.get('/', async (req: Request, res: Response) => {
       const searchTerm = `%${search.trim()}%`;
       countQuery = countQuery.where(function() {
         this.where('physical_items.name', 'like', searchTerm)
-          .orWhere('media.title', 'like', searchTerm)
-          .orWhere('media.director', 'like', searchTerm)
-          .orWhere('media.synopsis', 'like', searchTerm)
           .orWhere('physical_items.edition_notes', 'like', searchTerm)
           .orWhereRaw(`EXISTS (
-            SELECT 1 FROM json_each(media.cast) 
-            WHERE json_each.value LIKE ?
-          )`, [searchTerm]);
+            SELECT 1 FROM physical_item_media
+            JOIN media ON physical_item_media.media_id = media.id
+            WHERE physical_item_media.physical_item_id = physical_items.id
+            AND (
+              media.title LIKE ? OR
+              media.director LIKE ? OR
+              media.synopsis LIKE ? OR
+              EXISTS (
+                SELECT 1 FROM json_each(media.cast) 
+                WHERE json_each.value LIKE ?
+              )
+            )
+          )`, [searchTerm, searchTerm, searchTerm, searchTerm]);
       });
     }
 
-    const totalCount = await countQuery.countDistinct('physical_items.id as count').first();
+    const totalCount = await countQuery.count('physical_items.id as count').first();
     const total = totalCount ? parseInt(totalCount.count as string) : 0;
 
     // Calculate pagination
@@ -264,8 +304,11 @@ router.get('/', async (req: Request, res: Response) => {
     const offset = (pageNum - 1) * limitNum;
     const totalPages = Math.ceil(total / limitNum);
 
-    // Apply pagination
-    query = query.limit(limitNum).offset(offset);
+    // For series_sort, fetch ALL items first (no pagination), then sort and paginate
+    // For other sorts, apply pagination at SQL level
+    if (!isSeriesSort) {
+      query = query.limit(limitNum).offset(offset);
+    }
 
     const physicalItems = await query;
 
@@ -285,6 +328,82 @@ router.get('/', async (req: Request, res: Response) => {
       .orderBy('physical_item_media.physical_item_id')
       .orderBy('physical_item_media.disc_number') : [];
 
+    // For series_sort, fetch series data and movie_series data
+    let seriesMap = new Map<number, any>();
+    let mediaSeriesMap = new Map<number, any[]>(); // media_id -> array of {series_id, sort_order}
+    
+    if (isSeriesSort && itemIds.length > 0) {
+      // Fetch series data for physical items (via primary_series_id)
+      const physicalItemSeriesIds = physicalItems
+        .map(item => item.primary_series_id)
+        .filter(id => id !== null && id !== undefined) as number[];
+      
+      // Also get series IDs from media's primary_series_id or movie_series associations
+      const mediaIds = allLinkedMedia.map(m => m.id);
+      
+      // Get media's primary_series_id values
+      const mediaPrimarySeriesIds = allLinkedMedia
+        .map(m => m.primary_series_id)
+        .filter(id => id !== null && id !== undefined) as number[];
+      
+      const mediaSeriesAssociations = mediaIds.length > 0 ? await db('movie_series')
+        .whereIn('media_id', mediaIds)
+        .select('media_id', 'series_id', 'sort_order') : [];
+      
+      // Get all unique series IDs
+      const allSeriesIds = new Set<number>();
+      physicalItemSeriesIds.forEach(id => allSeriesIds.add(id));
+      mediaPrimarySeriesIds.forEach(id => allSeriesIds.add(id));
+      mediaSeriesAssociations.forEach(assoc => allSeriesIds.add(assoc.series_id));
+      
+      // Fetch all series data
+      if (allSeriesIds.size > 0) {
+        const seriesData = await db('series')
+          .whereIn('id', Array.from(allSeriesIds))
+          .select('id', 'sort_name', 'internal_sort_method');
+        
+        seriesData.forEach(series => {
+          seriesMap.set(series.id, series);
+        });
+      }
+      
+      // Build mediaSeriesMap: for each media, store its series associations
+      // Also include primary_series_id if it exists
+      allLinkedMedia.forEach(m => {
+        if (m.primary_series_id) {
+          if (!mediaSeriesMap.has(m.id)) {
+            mediaSeriesMap.set(m.id, []);
+          }
+          // Add primary series as first entry (higher priority)
+          mediaSeriesMap.get(m.id)!.unshift({
+            series_id: m.primary_series_id,
+            sort_order: null // Will be looked up from movie_series if needed
+          });
+        }
+      });
+      
+      mediaSeriesAssociations.forEach(assoc => {
+        if (!mediaSeriesMap.has(assoc.media_id)) {
+          mediaSeriesMap.set(assoc.media_id, []);
+        }
+        // Check if this series is already in the map (from primary_series_id)
+        const existing = mediaSeriesMap.get(assoc.media_id)!.find(
+          ms => ms.series_id === assoc.series_id
+        );
+        if (!existing) {
+          mediaSeriesMap.get(assoc.media_id)!.push({
+            series_id: assoc.series_id,
+            sort_order: assoc.sort_order
+          });
+        } else {
+          // Update sort_order if it wasn't set
+          if (existing.sort_order === null) {
+            existing.sort_order = assoc.sort_order;
+          }
+        }
+      });
+    }
+
     // Group media by physical_item_id for efficient lookup
     const mediaByItemId = new Map<number, any[]>();
     allLinkedMedia.forEach((mediaItem: any) => {
@@ -296,7 +415,7 @@ router.get('/', async (req: Request, res: Response) => {
     });
 
     // Build response with media grouped by physical item
-    const physicalItemsWithMedia: PhysicalItemWithMedia[] = physicalItems.map((item) => {
+    let physicalItemsWithMedia: PhysicalItemWithMedia[] = physicalItems.map((item) => {
       const linkedMedia = mediaByItemId.get(item.id) || [];
       
       // Parse JSON fields
@@ -309,30 +428,150 @@ router.get('/', async (req: Request, res: Response) => {
         release_date: m.release_date,
         director: m.director,
         disc_number: m.disc_number,
-        formats: m.formats ? JSON.parse(m.formats) : [],
-        cast: m.cast ? JSON.parse(m.cast) : [],
-        genres: m.genres ? JSON.parse(m.genres) : [],
+        formats: m.formats ? (typeof m.formats === 'string' ? JSON.parse(m.formats) : m.formats) : [],
+        cast: m.cast ? (typeof m.cast === 'string' ? JSON.parse(m.cast) : m.cast) : [],
+        genres: m.genres ? (typeof m.genres === 'string' ? JSON.parse(m.genres) : m.genres) : [],
       }));
 
       // Clean up the aggregated fields from the main query
       const cleanedItem = {
         ...item,
-        physical_format: JSON.parse(item.physical_format),
-        store_links: item.store_links ? JSON.parse(item.store_links) : [],
+        physical_format: item.physical_format ? (typeof item.physical_format === 'string' ? JSON.parse(item.physical_format) : item.physical_format) : [],
+        store_links: item.store_links ? (typeof item.store_links === 'string' ? JSON.parse(item.store_links) : item.store_links) : [],
         media,
-        // Remove aggregated fields that are not needed in response
-        media_ids: undefined,
-        media_titles: undefined,
-        media_directors: undefined,
-        media_release_dates: undefined,
-        earliest_release_date: undefined,
-        series_ids: undefined,
-        series_names: undefined,
-        series_sort_names: undefined,
       };
 
       return cleanedItem;
     });
+
+    // For series_sort, perform post-processing sort
+    if (isSeriesSort) {
+      physicalItemsWithMedia.sort((a, b) => {
+        // Determine primary series for each item
+        const getPrimarySeries = (item: PhysicalItemWithMedia) => {
+          // First check physical item's primary_series_id
+          if (item.primary_series_id) {
+            return seriesMap.get(item.primary_series_id);
+          }
+          
+          // Otherwise, check if any media has a primary_series_id or series association
+          for (const mediaItem of item.media) {
+            // Check if media has series associations (primary_series_id is already included)
+            const mediaSeries = mediaSeriesMap.get(mediaItem.id);
+            if (mediaSeries && mediaSeries.length > 0) {
+              // Use the first series found (which is the primary if it exists)
+              return seriesMap.get(mediaSeries[0].series_id);
+            }
+          }
+          
+          return null;
+        };
+        
+        const seriesA = getPrimarySeries(a);
+        const seriesB = getPrimarySeries(b);
+        
+        // Primary sort: Series sort_name (or physical item name if no series)
+        const primaryKeyA = seriesA?.sort_name || a.name || '';
+        const primaryKeyB = seriesB?.sort_name || b.name || '';
+        
+        let primaryCompare = primaryKeyA.localeCompare(primaryKeyB, undefined, { sensitivity: 'base' });
+        if (primaryCompare !== 0) {
+          return sortDirection === 'asc' ? primaryCompare : -primaryCompare;
+        }
+        
+        // Secondary sort: Based on series internal_sort_method
+        if (seriesA && seriesB && seriesA.id === seriesB.id) {
+          // Same series - apply internal sort method
+          const sortMethod = seriesA.internal_sort_method || 'chronological';
+          
+          let secondaryKeyA: string | number | null = null;
+          let secondaryKeyB: string | number | null = null;
+          
+          if (sortMethod === 'chronological') {
+            // Sort by earliest release_date
+            const datesA = a.media
+              .map(m => m.release_date)
+              .filter(d => d !== null && d !== undefined)
+              .sort();
+            const datesB = b.media
+              .map(m => m.release_date)
+              .filter(d => d !== null && d !== undefined)
+              .sort();
+            secondaryKeyA = datesA.length > 0 ? datesA[0] : null;
+            secondaryKeyB = datesB.length > 0 ? datesB[0] : null;
+          } else if (sortMethod === 'alphabetical') {
+            // Sort by first title alphabetically
+            const titlesA = a.media
+              .map(m => m.title)
+              .filter(t => t !== null && t !== undefined)
+              .sort((x, y) => x.localeCompare(y, undefined, { sensitivity: 'base' }));
+            const titlesB = b.media
+              .map(m => m.title)
+              .filter(t => t !== null && t !== undefined)
+              .sort((x, y) => x.localeCompare(y, undefined, { sensitivity: 'base' }));
+            secondaryKeyA = titlesA.length > 0 ? titlesA[0] : null;
+            secondaryKeyB = titlesB.length > 0 ? titlesB[0] : null;
+          } else if (sortMethod === 'custom') {
+            // Sort by minimum sort_order from movie_series
+            const sortOrdersA: number[] = [];
+            const sortOrdersB: number[] = [];
+            
+            a.media.forEach(m => {
+              const mediaSeries = mediaSeriesMap.get(m.id);
+              if (mediaSeries) {
+                mediaSeries.forEach(ms => {
+                  if (ms.series_id === seriesA.id && ms.sort_order !== null) {
+                    sortOrdersA.push(ms.sort_order);
+                  }
+                });
+              }
+            });
+            
+            b.media.forEach(m => {
+              const mediaSeries = mediaSeriesMap.get(m.id);
+              if (mediaSeries) {
+                mediaSeries.forEach(ms => {
+                  if (ms.series_id === seriesB.id && ms.sort_order !== null) {
+                    sortOrdersB.push(ms.sort_order);
+                  }
+                });
+              }
+            });
+            
+            secondaryKeyA = sortOrdersA.length > 0 ? Math.min(...sortOrdersA) : null;
+            secondaryKeyB = sortOrdersB.length > 0 ? Math.min(...sortOrdersB) : null;
+          }
+          
+          // Compare secondary keys
+          if (secondaryKeyA === null && secondaryKeyB === null) {
+            // Both null - fall back to physical item name
+            const nameCompare = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+            return sortDirection === 'asc' ? nameCompare : -nameCompare;
+          } else if (secondaryKeyA === null) {
+            return sortDirection === 'asc' ? 1 : -1; // nulls last
+          } else if (secondaryKeyB === null) {
+            return sortDirection === 'asc' ? -1 : 1; // nulls last
+          } else {
+            let secondaryCompare: number;
+            if (typeof secondaryKeyA === 'string' && typeof secondaryKeyB === 'string') {
+              secondaryCompare = secondaryKeyA.localeCompare(secondaryKeyB, undefined, { sensitivity: 'base' });
+            } else {
+              secondaryCompare = (secondaryKeyA as number) - (secondaryKeyB as number);
+            }
+            if (secondaryCompare !== 0) {
+              return sortDirection === 'asc' ? secondaryCompare : -secondaryCompare;
+            }
+          }
+        }
+        
+        // Fallback: sort by physical item name
+        const nameCompare = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+        return sortDirection === 'asc' ? nameCompare : -nameCompare;
+      });
+      
+      // Apply pagination after sorting
+      physicalItemsWithMedia = physicalItemsWithMedia.slice(offset, offset + limitNum);
+    }
 
     res.json({
       items: physicalItemsWithMedia,
@@ -403,7 +642,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { name, edition_notes, custom_image_url, purchase_date, media, store_links } = req.body;
+    const { name, edition_notes, custom_image_url, purchase_date, media, store_links, primary_series_id } = req.body;
 
     // Validation function for store links
     const validateStoreLinks = (links: any[]): boolean => {
@@ -451,6 +690,14 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     // Start a transaction
     const result = await db.transaction(async (trx) => {
+      // Validate primary_series_id if provided
+      if (primary_series_id !== undefined && primary_series_id !== null) {
+        const seriesExists = await trx('series').where({ id: primary_series_id }).first();
+        if (!seriesExists) {
+          throw new Error('Primary series not found');
+        }
+      }
+
       // Create physical item first (formats will be calculated after linking media)
       const physicalItemData = {
         name,
@@ -459,6 +706,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         custom_image_url,
         purchase_date,
         store_links: store_links ? JSON.stringify(store_links) : null,
+        primary_series_id: primary_series_id || null,
       };
 
       const [physicalItemId] = await trx('physical_items').insert(physicalItemData);
@@ -559,12 +807,41 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, physical_format, edition_notes, custom_image_url, purchase_date, store_links } = req.body;
+    const { name, physical_format, edition_notes, custom_image_url, purchase_date, store_links, primary_series_id } = req.body;
+
+    console.log('PUT /api/physical-items/:id', { id, body: req.body });
 
     // Check if physical item exists
     const existingItem = await db('physical_items').where('id', id).first();
     if (!existingItem) {
       return res.status(404).json({ error: 'Physical item not found' });
+    }
+
+    // Validate primary_series_id if provided
+    if (primary_series_id !== undefined && primary_series_id !== null) {
+      const seriesExists = await db('series').where({ id: primary_series_id }).first();
+      if (!seriesExists) {
+        return res.status(400).json({ error: 'Primary series not found' });
+      }
+      
+      // Only validate media belongs to series if there are media links
+      // Allow setting primary_series_id even if no media is linked yet
+      const hasMediaLinks = await db('physical_item_media')
+        .where('physical_item_id', id)
+        .first();
+      
+      if (hasMediaLinks) {
+        // Validate that at least one media in this physical item belongs to the primary series
+        const mediaInSeries = await db('physical_item_media')
+          .join('movie_series', 'physical_item_media.media_id', 'movie_series.media_id')
+          .where('physical_item_media.physical_item_id', id)
+          .where('movie_series.series_id', primary_series_id)
+          .first();
+        
+        if (!mediaInSeries) {
+          return res.status(400).json({ error: 'None of the media in this physical item belongs to the specified primary series' });
+        }
+      }
     }
 
     // Prepare update data
@@ -574,6 +851,7 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
     if (edition_notes !== undefined) updateData.edition_notes = edition_notes;
     if (custom_image_url !== undefined) updateData.custom_image_url = custom_image_url;
     if (purchase_date !== undefined) updateData.purchase_date = purchase_date;
+    if (primary_series_id !== undefined) updateData.primary_series_id = primary_series_id || null;
     if (store_links !== undefined) {
       // Validate store links if provided
       if (store_links !== null && store_links !== undefined) {
@@ -654,6 +932,10 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     console.error('Error updating physical item:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
     res.status(500).json({ error: 'Failed to update physical item' });
   }
 });

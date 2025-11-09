@@ -256,6 +256,16 @@ class ApiService {
     await this.api.delete(`/series/${id}`);
   }
 
+  async updateSeriesMovieSortOrder(seriesId: number, mediaId: number, sortOrder: number | null): Promise<any> {
+    const response = await this.api.post(`/series/${seriesId}/movies/${mediaId}/sort-order`, { sort_order: sortOrder });
+    return response.data;
+  }
+
+  async bulkUpdateSeriesMovieSortOrders(seriesId: number, sortOrders: Array<{media_id: number; sort_order: number | null}>): Promise<Media[]> {
+    const response = await this.api.put<Media[]>(`/series/${seriesId}/movies/sort-orders`, { sort_orders: sortOrders });
+    return response.data;
+  }
+
   // Settings methods
   async getSettings(): Promise<Settings> {
     const response = await this.api.get<Settings>('/settings');
@@ -306,8 +316,33 @@ class ApiService {
   }
 
   // Statistics methods
-  async getStatistics(): Promise<CollectionStatistics> {
-    const response = await this.api.get<CollectionStatistics>('/statistics');
+  async getStatistics(filters?: {
+    format?: string | string[];
+    genres?: number[];
+    decades?: string[];
+    search?: string;
+  }): Promise<CollectionStatistics> {
+    const params: any = {};
+    if (filters) {
+      if (filters.format) {
+        // Handle both single format and array of formats
+        if (Array.isArray(filters.format)) {
+          params.format = filters.format.join(',');
+        } else {
+          params.format = filters.format;
+        }
+      }
+      if (filters.genres && filters.genres.length > 0) {
+        params.genres = filters.genres.join(',');
+      }
+      if (filters.decades && filters.decades.length > 0) {
+        params.decades = filters.decades.join(',');
+      }
+      if (filters.search) {
+        params.search = filters.search;
+      }
+    }
+    const response = await this.api.get<CollectionStatistics>('/statistics', { params });
     return response.data;
   }
 

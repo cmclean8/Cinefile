@@ -4,6 +4,7 @@ export interface Series {
   name: string;
   sort_name: string;
   tmdb_collection_id?: number;
+  internal_sort_method?: 'chronological' | 'custom' | 'alphabetical';
   created_at?: string;
   updated_at?: string;
 }
@@ -29,6 +30,7 @@ export interface Media {
   cast?: string[];
   genres?: { id: number; name: string }[];
   series?: Series[];
+  primary_series_id?: number;
   created_at?: string;
   updated_at?: string;
   disc_number?: number; // For junction table data
@@ -45,7 +47,14 @@ export interface CreateMediaDto {
   cast?: string[];
 }
 
-export type UpdateMediaDto = Partial<CreateMediaDto>;
+export interface UpdateMediaDto extends Partial<CreateMediaDto> {
+  series_associations?: Array<{
+    series_id: number;
+    sort_order?: number | null;
+    auto_sort?: boolean;
+  }>;
+  primary_series_id?: number | null;
+}
 
 // Unified Search types
 export interface UnifiedSearchResult {
@@ -70,6 +79,7 @@ export interface PhysicalItem {
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: Array<{label: string; url: string}>;
+  primary_series_id?: number;
   created_at?: string;
   updated_at?: string;
   media: Media[]; // Linked media entries
@@ -81,6 +91,7 @@ export interface CreatePhysicalItemDto {
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: Array<{label: string; url: string}>;
+  primary_series_id?: number;
   media: {
     id?: number; // If linking to existing media
     title?: string; // If creating new media

@@ -73,14 +73,14 @@ const CollectionStatistics: React.FC<CollectionStatisticsProps> = ({ statistics,
         </div>
 
         {/* Format Counts - Only show formats with movies */}
-        {activeFormats.map(format => {
-          const colors = getFormatColors(format);
+        {activeFormats.map((format) => {
+          const { bg, text, count } = getFormatColors(format);
           return (
-            <div key={format} className={`text-center p-4 rounded-lg ${colors.bg}`}>
-              <div className={`text-2xl font-bold ${colors.count}`}>
+            <div key={format} className={`text-center p-4 rounded-lg ${bg}`}>
+              <div className={`text-2xl font-bold ${count}`}>
                 {statistics.formatCounts[format]}
               </div>
-              <div className={`text-sm font-medium ${colors.text}`}>{format}</div>
+              <div className={`text-sm font-medium ${text}`}>{format}</div>
             </div>
           );
         })}

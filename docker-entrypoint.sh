@@ -20,14 +20,44 @@ if [ -z "$ADMIN_PASSWORD" ]; then
     echo "   Admin panel will not be accessible."
 fi
 
-# Run database migrations
+# Run database migrations with safety checks
 echo ""
 echo "🗄️  Running database migrations..."
+
+# Check data integrity before migrations
+if [ -f "$DATABASE_PATH" ]; then
+  echo "🔍 Pre-migration data check..."
+  PHYSICAL_ITEMS=$(node -e "const db = require('better-sqlite3')('$DATABASE_PATH'); try { const rows = db.prepare('SELECT COUNT(*) as count FROM physical_items').get(); console.log(rows.count); } catch(e) { console.log('0'); }" 2>/dev/null || echo "0")
+  LINKS=$(node -e "const db = require('better-sqlite3')('$DATABASE_PATH'); try { const rows = db.prepare('SELECT COUNT(*) as count FROM physical_item_media').get(); console.log(rows.count); } catch(e) { console.log('0'); }" 2>/dev/null || echo "0")
+  
+  if [ "$PHYSICAL_ITEMS" -gt 0 ] && [ "$LINKS" -gt 0 ]; then
+    echo "   Found $PHYSICAL_ITEMS physical items with $LINKS links"
+    echo "💾 Creating backup before migration..."
+    BACKUP_PATH="${DATABASE_PATH}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$DATABASE_PATH" "$BACKUP_PATH" 2>/dev/null || true
+    echo "✅ Backup created: $(basename $BACKUP_PATH)"
+  fi
+fi
+
 if npx knex migrate:latest; then
-    echo "✅ Database migrations completed successfully"
+  echo "✅ Database migrations completed successfully"
+  
+  # Verify data integrity after migrations
+  if [ -f "$DATABASE_PATH" ]; then
+    echo "🔍 Post-migration data check..."
+    NEW_LINKS=$(node -e "const db = require('better-sqlite3')('$DATABASE_PATH'); try { const rows = db.prepare('SELECT COUNT(*) as count FROM physical_item_media').get(); console.log(rows.count); } catch(e) { console.log('0'); }" 2>/dev/null || echo "0")
+    
+    if [ "$PHYSICAL_ITEMS" -gt 0 ] && [ "$NEW_LINKS" -eq 0 ] && [ "$LINKS" -gt 0 ]; then
+      echo "⚠️  WARNING: Links were lost during migration!"
+      echo "   Before: $LINKS links, After: $NEW_LINKS links"
+      echo "   Check backup: $BACKUP_PATH"
+    else
+      echo "✅ Data integrity verified"
+    fi
+  fi
 else
-    echo "❌ Database migrations failed!"
-    exit 1
+  echo "❌ Database migrations failed!"
+  exit 1
 fi
 
 # Check database

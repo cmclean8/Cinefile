@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PhysicalItem, TMDbMovie, Media, UnifiedSearchResult } from '../types';
+import { PhysicalItem, TMDbMovie, Media, UnifiedSearchResult, Series } from '../types';
 import { apiService } from '../services/api.service';
 import UnifiedSearchModal from './UnifiedSearchModal';
 import StoreLinkManager from './StoreLinkManager';
@@ -21,6 +21,8 @@ interface MovieWithFormats {
 }
 
 const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editItem }) => {
+  console.log('🎬 MediaForm rendered:', { isOpen, editItemId: editItem?.id, editItemName: editItem?.name });
+  
   const [showUnifiedSearch, setShowUnifiedSearch] = useState(false);
   const [showMediaEditModal, setShowMediaEditModal] = useState(false);
   const [editingMedia, setEditingMedia] = useState<Media | null>(null);
@@ -38,7 +40,22 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
     edition_notes: '',
     custom_image_url: '',
     purchase_date: '',
+    primary_series_id: undefined as number | undefined,
   });
+  const [availableSeries, setAvailableSeries] = useState<Series[]>([]);
+
+  useEffect(() => {
+    // Load available series
+    const loadSeries = async () => {
+      try {
+        const series = await apiService.getSeries();
+        setAvailableSeries(series);
+      } catch (error) {
+        console.error('Failed to load series:', error);
+      }
+    };
+    loadSeries();
+  }, []);
 
   useEffect(() => {
     if (editItem) {
@@ -49,6 +66,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         edition_notes: editItem.edition_notes || '',
         custom_image_url: editItem.custom_image_url || '',
         purchase_date: editItem.purchase_date || '',
+        primary_series_id: editItem.primary_series_id,
       });
       
       // Convert existing media to MovieWithFormats format for display
@@ -104,6 +122,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         edition_notes: '',
         custom_image_url: '',
         purchase_date: '',
+        primary_series_id: undefined,
       });
       setSelectedMovies([]);
       setMovieDetails(new Map());
@@ -129,6 +148,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
             vote_count: 0,
           },
           formats,
+          mediaDbId: existingMedia.id, // Preserve the database ID for existing media
           details: {
             title: existingMedia.title,
             id: existingMedia.tmdb_id || existingMedia.id,
@@ -142,7 +162,13 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           }
         };
         
-        setSelectedMovies(prev => [...prev, newMovieWithFormats]);
+        console.log('📦 Added existing database media:', { id: existingMedia.id, title: existingMedia.title, formats });
+        
+        setSelectedMovies(prev => {
+          const updated = [...prev, newMovieWithFormats];
+          console.log('📦 Updated selectedMovies:', updated.map(m => ({ title: m.movie.title, mediaDbId: m.mediaDbId })));
+          return updated;
+        });
         
         // Auto-generate name if not manually set
         const allMovies = [...selectedMovies, newMovieWithFormats];
@@ -173,6 +199,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           details
         };
         
+        console.log('🎬 Added TMDB movie:', { tmdb_id: tmdbMovie.id, title: tmdbMovie.title, formats });
         setSelectedMovies(prev => [...prev, newMovieWithFormats]);
         
         // Auto-generate name if not manually set
@@ -232,20 +259,34 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
     }
   };
 
-  const handleEditMovie = (movieWithFormats: MovieWithFormats) => {
-    // Convert MovieWithFormats to Media type
-    const media: Media = {
-      id: movieWithFormats.mediaDbId!,
-      title: movieWithFormats.details.title,
-      tmdb_id: movieWithFormats.details.id,
-      synopsis: movieWithFormats.details.synopsis,
-      cover_art_url: movieWithFormats.details.cover_art_url,
-      release_date: movieWithFormats.details.release_date,
-      director: movieWithFormats.details.director,
-      cast: movieWithFormats.details.cast,
-    };
-    setEditingMedia(media);
-    setShowMediaEditModal(true);
+  const handleEditMovie = async (movieWithFormats: MovieWithFormats) => {
+    if (!movieWithFormats.mediaDbId) {
+      alert('Cannot edit: Movie not yet saved to database');
+      return;
+    }
+    
+    // Fetch full media data including series
+    try {
+      const fullMedia = await apiService.getMediaById(movieWithFormats.mediaDbId);
+      setEditingMedia(fullMedia);
+      setShowMediaEditModal(true);
+    } catch (error) {
+      console.error('Failed to load media:', error);
+      // Fallback to basic media object if fetch fails
+      const media: Media = {
+        id: movieWithFormats.mediaDbId,
+        title: movieWithFormats.details.title,
+        tmdb_id: movieWithFormats.details.id,
+        synopsis: movieWithFormats.details.synopsis,
+        cover_art_url: movieWithFormats.details.cover_art_url,
+        release_date: movieWithFormats.details.release_date,
+        director: movieWithFormats.details.director,
+        cast: movieWithFormats.details.cast,
+        series: [], // Fallback: no series data
+      };
+      setEditingMedia(media);
+      setShowMediaEditModal(true);
+    }
   };
 
   const handleEditFormats = (movieId: number) => {
@@ -341,6 +382,12 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('🎬 MediaForm handleSubmit:', {
+      editItem: !!editItem,
+      selectedMoviesCount: selectedMovies.length,
+      selectedMovies: selectedMovies.map(m => ({ title: m.movie.title, mediaDbId: m.mediaDbId, formats: m.formats }))
+    });
+    
     // Validate at least one movie is selected
     if (selectedMovies.length === 0) {
       alert('Please select at least one movie from TMDB.');
@@ -354,6 +401,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
       const finalName = formData.name || updatePhysicalItemName(selectedMovies);
 
       if (editItem) {
+        console.log('🎬 Updating existing physical item:', editItem.id);
         // Update existing physical item (physical fields only)
         await apiService.updatePhysicalItem(editItem.id, {
           name: finalName,
@@ -361,7 +409,80 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
           store_links: storeLinks,
+          primary_series_id: formData.primary_series_id,
         });
+
+        // Handle media links for existing physical items
+        // Get list of currently linked media IDs
+        const currentMediaIds = new Set(editItem.media.map(m => m.id));
+        const selectedMediaIds = new Set(selectedMovies.map(m => m.mediaDbId).filter(id => id !== undefined));
+
+        console.log('🎬 Media link management:', {
+          currentMediaIds: Array.from(currentMediaIds),
+          selectedMediaIds: Array.from(selectedMediaIds)
+        });
+
+        // Remove media links that are no longer selected
+        for (const mediaId of currentMediaIds) {
+          if (!selectedMediaIds.has(mediaId)) {
+            console.log('🗑️ Removing media link:', mediaId);
+            try {
+              await apiService.removeMediaLink(editItem.id, mediaId);
+            } catch (error) {
+              console.error(`Failed to remove media link ${mediaId}:`, error);
+            }
+          }
+        }
+
+        // Add new media links for selected movies
+        for (const movieWithFormats of selectedMovies) {
+          const { movie, formats, details, mediaDbId } = movieWithFormats;
+          
+          // Skip if this media is already linked
+          if (mediaDbId && currentMediaIds.has(mediaDbId)) {
+            console.log('📝 Updating formats for existing media:', mediaDbId);
+            // Update formats if they changed
+            try {
+              await apiService.updateMovieFormats(editItem.id, mediaDbId, formats);
+            } catch (error) {
+              console.error(`Failed to update formats for media ${mediaDbId}:`, error);
+            }
+            continue;
+          }
+
+          // Add new media link
+          const mediaData = mediaDbId ? {
+            id: mediaDbId,
+            formats: formats,
+            disc_number: 1, // Default disc number
+          } : {
+            title: details?.title || movie.title,
+            tmdb_id: details?.id || movie.id,
+            synopsis: details?.overview || details?.synopsis || movie.overview,
+            cover_art_url: details?.poster_url || details?.cover_art_url || '',
+            release_date: details?.release_date || movie.release_date,
+            director: details?.director || '',
+            cast: details?.cast || [],
+            formats: formats,
+            disc_number: 1, // Default disc number
+          };
+
+          console.log('➕ Adding new media link:', { 
+            physicalItemId: editItem.id,
+            mediaDbId, 
+            title: movie.title, 
+            formats,
+            mediaData 
+          });
+          try {
+            const result = await apiService.addMediaLink(editItem.id, mediaData);
+            console.log('✅ Media link added successfully:', result);
+          } catch (error: any) {
+            console.error(`❌ Failed to add media link:`, error);
+            console.error('❌ Error details:', error.response?.data || error.message);
+            throw error; // Re-throw to show error to user
+          }
+        }
       } else {
         // Create new physical item with linked media
         const mediaArray = selectedMovies.map(movieWithFormats => {
@@ -384,6 +505,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
           store_links: storeLinks,
+          primary_series_id: formData.primary_series_id,
           media: mediaArray,
         });
       }
@@ -584,6 +706,30 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
                     />
                   </div>
 
+                  {/* Primary Series */}
+                  {availableSeries.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Primary Series
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                          (Optional - for items with multiple series)
+                        </span>
+                      </label>
+                      <select
+                        value={formData.primary_series_id || ''}
+                        onChange={(e) => setFormData({ ...formData, primary_series_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      >
+                        <option value="">None</option>
+                        {availableSeries.map(series => (
+                          <option key={series.id} value={series.id}>
+                            {series.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   {/* Edition Notes */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -614,7 +760,12 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
                 <button type="button" onClick={onClose} className="btn-secondary">
                   Cancel
                 </button>
-                <button type="submit" disabled={isSubmitting} className="btn-primary">
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting} 
+                  className="btn-primary"
+                  onClick={() => console.log('🔘 Save button clicked!', { selectedMoviesCount: selectedMovies.length })}
+                >
                   {isSubmitting ? 'Saving...' : editItem ? 'Update' : 'Add Media'}
                 </button>
               </div>

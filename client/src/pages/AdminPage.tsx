@@ -424,7 +424,7 @@ const AdminPage: React.FC = () => {
       {/* Collection Management Links */}
       <div className="card">
         <h3 className="text-lg font-semibold mb-4">Collection Management</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <a
             href="/"
             className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -458,6 +458,23 @@ const AdminPage: React.FC = () => {
               </div>
             </div>
           </a>
+          
+          <button
+            onClick={() => setActiveTab('series')}
+            className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100">Manage Series</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Organize movies into series and set custom ordering</p>
+              </div>
+            </div>
+          </button>
         </div>
       </div>
 
