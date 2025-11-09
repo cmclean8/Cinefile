@@ -1,6 +1,6 @@
 # Cinefile 🎬
 
-A simple, clean, and modern self-hosted web application for cataloging and displaying your personal collection of physical video media (Blu-rays, 4K UHDs, DVDs, LaserDiscs, and VHS).
+A simple, clean, and modern self-hosted web application for cataloging and displaying your personal collection of physical video media (Blu-rays, 4K UHDs, DVDs, LaserDiscs, and VHS). You can see a live read-only version of this at https://cinefile.itsanhonor.me/ (which is my own humble collection!)
 
 ## Features
 
