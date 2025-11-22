@@ -5,7 +5,9 @@ services:
     image: ghcr.io/itsanhonor/cinefile:latest
     container_name: cinefile
     restart: unless-stopped
-    user: "1000:1000"
+    # User: Defaults to nodejs (UID 1001) from Dockerfile
+    # To override, uncomment and set to your user ID:
+    # user: "1000:1000"
     ports:
       # Read-Only Port (Public-facing)
       # Maps host port to container port 3000 (read-only server)
@@ -28,5 +30,7 @@ services:
       - UPLOAD_DIR=/data/uploads
     volumes:
       # CHOOSE YOUR STORAGE HERE!
+      # Ensure the host directory is writable by the container user (UID 1001 by default)
+      # If needed: sudo chown -R 1001:1001 /opt/cinefile
       - /opt/cinefile:/data
 
