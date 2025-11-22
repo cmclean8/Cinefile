@@ -50,7 +50,7 @@ const CollectionStatistics: React.FC<CollectionStatisticsProps> = ({ statistics,
     count: 'text-gray-600 dark:text-gray-400'
   };
 
-  const formatOrder = ['4K UHD', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'];
+  const formatOrder = ['4K UHD', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
   const activeFormats = formatOrder.filter(format => statistics.formatCounts[format] > 0);
 
   return (

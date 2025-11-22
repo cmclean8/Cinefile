@@ -739,7 +739,7 @@ const AdminPage: React.FC = () => {
                     <p className="font-medium">Required Fields:</p>
                     <ul className="list-disc list-inside ml-2 space-y-1">
                       <li><code className="bg-gray-200 dark:bg-gray-600 px-1 rounded">title</code> - The title of the media item</li>
-                      <li><code className="bg-gray-200 dark:bg-gray-600 px-1 rounded">physical_format</code> - Must be one of: 4K UHD, Blu-ray, DVD, LaserDisc, VHS</li>
+                      <li><code className="bg-gray-200 dark:bg-gray-600 px-1 rounded">physical_format</code> - Must be one of: 4K UHD, Blu-ray, DVD, Digital-UHD, Digital-HD, Digital-SD, LaserDisc, VHS</li>
                     </ul>
                     <p className="font-medium mt-3">Optional Fields:</p>
                     <ul className="list-disc list-inside ml-2 space-y-1">

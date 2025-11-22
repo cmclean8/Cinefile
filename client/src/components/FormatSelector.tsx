@@ -17,7 +17,7 @@ const FormatSelector: React.FC<FormatSelectorProps> = ({
 }) => {
   const [selectedFormats, setSelectedFormats] = useState<string[]>(initialFormats);
 
-  const availableFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'];
+  const availableFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
 
   const handleFormatToggle = (format: string) => {
     setSelectedFormats(prev => 

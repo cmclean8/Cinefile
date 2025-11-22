@@ -31,7 +31,7 @@ router.get('/schema', (req: Request, res: Response) => {
         type: 'JSON array (string)',
         required: true,
         description: 'Physical format(s) for this specific movie. JSON array of formats.',
-        allowed_values: ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'],
+        allowed_values: ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'],
         example: '["Blu-ray","DVD"]',
       },
       {

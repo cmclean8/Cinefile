@@ -168,7 +168,7 @@ export interface AuthResponse {
 }
 
 // Filter and sort types
-export type PhysicalFormat = '4K UHD' | 'Blu-ray' | 'DVD' | 'LaserDisc' | 'VHS' | 'all';
+export type PhysicalFormat = '4K UHD' | 'Blu-ray' | 'DVD' | 'Digital-HD' | 'Digital-SD' | 'Digital-UHD' | 'LaserDisc' | 'VHS' | 'all';
 export type SortField = 'title' | 'release_date' | 'created_at' | 'physical_format' | 'series_sort' | 'director_last_name';
 export type SortOrder = 'asc' | 'desc';
 

@@ -692,7 +692,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'At least one media entry is required' });
     }
 
-    const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'];
+    const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
 
     // Start a transaction
     const result = await db.transaction(async (trx) => {
@@ -909,7 +909,7 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'physical_format must be a string or array' });
       }
 
-      const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'];
+      const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
       for (const format of formatArray) {
         if (!validFormats.includes(format)) {
           return res.status(400).json({ 
@@ -1012,7 +1012,7 @@ router.post('/:id/media', authMiddleware, async (req: Request, res: Response) =>
       mediaFormats = ['Blu-ray']; // Default
     }
 
-    const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'];
+    const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
     for (const format of mediaFormats) {
       if (!validFormats.includes(format)) {
         return res.status(400).json({ 
@@ -1208,7 +1208,7 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
             throw new Error('physical_format must be a string or array');
           }
 
-          const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'];
+          const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
           for (const format of formatArray) {
             if (!validFormats.includes(format)) {
               throw new Error(`Invalid physical format: ${format}`);
@@ -1332,7 +1332,7 @@ router.put('/:id/media/:mediaId/formats', authMiddleware, async (req: Request, r
     }
 
     // Validate formats
-    const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'];
+    const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
     for (const format of formats) {
       if (!validFormats.includes(format)) {
         return res.status(400).json({ 

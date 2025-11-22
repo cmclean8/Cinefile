@@ -5,7 +5,7 @@ A simple, clean, and modern self-hosted web application for cataloging and displ
 ## Features
 
 - **Media Management**: Add, edit, and delete entries with TMDb API integration
-- **Multiple Formats**: Support for 4K UHD, 3D Blu-ray, Blu-ray, DVD, LaserDisc, and VHS
+- **Multiple Formats**: Support for 4K UHD, 3D Blu-ray, Blu-ray, DVD, Digital-UHD, Digital-HD, Digital-SD, LaserDisc, and VHS
 - **CSV Import/Export**: Backup and restore your collection with full metadata
 - **Beautiful Gallery**: Responsive collection view with cover art and filtering
 - **Two-Port Architecture**: Read-only public port and full admin port for enhanced security
@@ -38,7 +38,7 @@ Cinefile organizes your physical media collection around these core concepts:
 
 A **Physical Item** is the actual disc, tape, or other physical media object in your collection. This is what you can hold in your hand. Each physical item can have:
 - A unique barcode or identifier
-- A physical format (4K UHD, Blu-ray, DVD, LaserDisc, VHS)
+- A physical format (4K UHD, Blu-ray, DVD, Digital-UHD, Digital-HD, Digital-SD, LaserDisc, VHS)
 - Optional custom photos of the physical media
 - Edition details (Criterion, Steelbook, Limited Edition, etc.)
 - Other custom metadata fields links to the store page, buying links, etc. 
@@ -58,6 +58,9 @@ Cinefile supports tracking these physical formats:
 - **Blu-ray**: Standard high-definition Blu-ray discs
 - **3D Blu-ray**: Blu-ray discs specifically encoded for 3D films
 - **DVD**: Standard definition DVDs
+- **Digital-UHD**: Digital copies in Ultra HD quality
+- **Digital-HD**: Digital copies in high definition
+- **Digital-SD**: Digital copies in standard definition
 - **LaserDisc**: Legacy LaserDisc format
 - **VHS**: VHS tapes
 

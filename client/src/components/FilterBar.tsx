@@ -175,7 +175,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
                       />
                       <span className="text-sm text-gray-900 dark:text-gray-100">All Formats</span>
                     </label>
-                    {(['4K UHD', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'] as PhysicalFormat[]).map((fmt) => {
+                    {(['4K UHD', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'] as PhysicalFormat[]).map((fmt) => {
                       const isChecked = Array.isArray(format) ? format.includes(fmt) : false;
                       return (
                         <label key={fmt} className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer">

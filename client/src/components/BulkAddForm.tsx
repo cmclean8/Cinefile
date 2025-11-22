@@ -16,7 +16,7 @@ const BulkAddForm: React.FC<BulkAddFormProps> = ({ onSuccess }) => {
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState<any>(null);
 
-  const availableFormats = ['4K UHD', 'Blu-ray', 'DVD', 'LaserDisc', 'VHS'];
+  const availableFormats = ['4K UHD', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
 
   const handleSearch = async () => {
     if (!movieTitles.trim()) return;
