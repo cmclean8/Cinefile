@@ -74,6 +74,7 @@ export interface UnifiedSearchResult {
 export interface PhysicalItem {
   id: number;
   name: string;
+  sort_name?: string;
   physical_format: string[];
   edition_notes?: string;
   custom_image_url?: string;
@@ -87,6 +88,7 @@ export interface PhysicalItem {
 
 export interface CreatePhysicalItemDto {
   name: string;
+  sort_name?: string;
   edition_notes?: string;
   custom_image_url?: string;
   purchase_date?: string;

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../database';
 import { authMiddleware } from '../middleware/auth.middleware';
+import { calculateSortName } from '../utils/sort-name.util';
 
 const router = Router();
 
@@ -616,6 +617,7 @@ router.post('/import', authMiddleware, async (req: Request, res: Response) => {
             // Create new physical item
             const physicalItemData = {
               name: itemName,
+              sort_name: calculateSortName(itemName) || null,
               physical_format: JSON.stringify([]), // Will be updated after processing movies
               edition_notes: movies[0].edition_notes || null,
               purchase_date: movies[0].purchase_date || null,

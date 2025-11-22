@@ -37,6 +37,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
   const [formData, setFormData] = useState({
     // Physical item fields
     name: '',
+    sort_name: '',
     edition_notes: '',
     custom_image_url: '',
     purchase_date: '',
@@ -63,6 +64,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
       setFormData({
         // Physical item fields
         name: editItem.name,
+        sort_name: editItem.sort_name || '',
         edition_notes: editItem.edition_notes || '',
         custom_image_url: editItem.custom_image_url || '',
         purchase_date: editItem.purchase_date || '',
@@ -119,6 +121,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
       // Reset form when not editing
       setFormData({
         name: '',
+        sort_name: '',
         edition_notes: '',
         custom_image_url: '',
         purchase_date: '',
@@ -405,6 +408,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         // Update existing physical item (physical fields only)
         await apiService.updatePhysicalItem(editItem.id, {
           name: finalName,
+          sort_name: formData.sort_name || undefined,
           edition_notes: formData.edition_notes,
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
@@ -501,6 +505,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
 
         await apiService.createPhysicalItem({
           name: finalName,
+          sort_name: formData.sort_name || undefined,
           edition_notes: formData.edition_notes,
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
@@ -690,6 +695,23 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
                     />
                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                       Auto-generated from movie titles and formats. Customize if needed.
+                    </p>
+                  </div>
+
+                  {/* Sort Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Sort Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.sort_name || ''}
+                      onChange={(e) => setFormData({ ...formData, sort_name: e.target.value })}
+                      placeholder="Auto-calculated from name (e.g., 'The Batman' → 'Batman')"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      Used for sorting. Automatically calculated from name if left empty. Override if needed.
                     </p>
                   </div>
 

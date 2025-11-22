@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../database';
 import { authMiddleware } from '../middleware/auth.middleware';
+import { calculateSortName } from '../utils/sort-name.util';
 
 const router = Router();
 
 interface PhysicalItem {
   id?: number;
   name: string;
+  sort_name?: string;
   physical_format: string; // JSON string of array
   edition_notes?: string;
   custom_image_url?: string;
@@ -156,8 +158,8 @@ router.get('/', async (req: Request, res: Response) => {
     const isSeriesSort = sort_by === 'series_sort';
     
     if (sort_by === 'title') {
-      // Sort by physical item name
-      query = query.orderBy('physical_items.name', sortDirection);
+      // Sort by physical item sort_name (fallback to name if sort_name is null)
+      query = query.orderByRaw('COALESCE(physical_items.sort_name, physical_items.name) ' + sortDirection);
     } else if (isSeriesSort) {
       // For series_sort, skip SQL-level sorting - will be handled after fetching series data
       // No orderBy clause here
@@ -470,9 +472,9 @@ router.get('/', async (req: Request, res: Response) => {
         const seriesA = getPrimarySeries(a);
         const seriesB = getPrimarySeries(b);
         
-        // Primary sort: Series sort_name (or physical item name if no series)
-        const primaryKeyA = seriesA?.sort_name || a.name || '';
-        const primaryKeyB = seriesB?.sort_name || b.name || '';
+        // Primary sort: Series sort_name (or physical item sort_name/name if no series)
+        const primaryKeyA = seriesA?.sort_name || a.sort_name || a.name || '';
+        const primaryKeyB = seriesB?.sort_name || b.sort_name || b.name || '';
         
         let primaryCompare = primaryKeyA.localeCompare(primaryKeyB, undefined, { sensitivity: 'base' });
         if (primaryCompare !== 0) {
@@ -544,8 +546,10 @@ router.get('/', async (req: Request, res: Response) => {
           
           // Compare secondary keys
           if (secondaryKeyA === null && secondaryKeyB === null) {
-            // Both null - fall back to physical item name
-            const nameCompare = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+            // Both null - fall back to physical item sort_name/name
+            const nameA = a.sort_name || a.name || '';
+            const nameB = b.sort_name || b.name || '';
+            const nameCompare = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
             return sortDirection === 'asc' ? nameCompare : -nameCompare;
           } else if (secondaryKeyA === null) {
             return sortDirection === 'asc' ? 1 : -1; // nulls last
@@ -564,8 +568,10 @@ router.get('/', async (req: Request, res: Response) => {
           }
         }
         
-        // Fallback: sort by physical item name
-        const nameCompare = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+        // Fallback: sort by physical item sort_name/name
+        const nameA = a.sort_name || a.name || '';
+        const nameB = b.sort_name || b.name || '';
+        const nameCompare = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
         return sortDirection === 'asc' ? nameCompare : -nameCompare;
       });
       
@@ -642,7 +648,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { name, edition_notes, custom_image_url, purchase_date, media, store_links, primary_series_id } = req.body;
+    const { name, edition_notes, custom_image_url, purchase_date, media, store_links, primary_series_id, sort_name } = req.body;
 
     // Validation function for store links
     const validateStoreLinks = (links: any[]): boolean => {
@@ -699,8 +705,11 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       }
 
       // Create physical item first (formats will be calculated after linking media)
+      // Calculate sort_name if not provided, but allow user override
+      const calculatedSortName = sort_name !== undefined ? sort_name : calculateSortName(name);
       const physicalItemData = {
         name,
+        sort_name: calculatedSortName || null,
         physical_format: JSON.stringify([]), // Will be updated after linking media
         edition_notes,
         custom_image_url,
@@ -807,7 +816,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, physical_format, edition_notes, custom_image_url, purchase_date, store_links, primary_series_id } = req.body;
+    const { name, physical_format, edition_notes, custom_image_url, purchase_date, store_links, primary_series_id, sort_name } = req.body;
 
     console.log('PUT /api/physical-items/:id', { id, body: req.body });
 
@@ -852,6 +861,14 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
     if (custom_image_url !== undefined) updateData.custom_image_url = custom_image_url;
     if (purchase_date !== undefined) updateData.purchase_date = purchase_date;
     if (primary_series_id !== undefined) updateData.primary_series_id = primary_series_id || null;
+    
+    // Handle sort_name: if explicitly provided, use it; otherwise recalculate if name changed
+    if (sort_name !== undefined) {
+      updateData.sort_name = sort_name || null;
+    } else if (name !== undefined) {
+      // Name is being updated, recalculate sort_name
+      updateData.sort_name = calculateSortName(name) || null;
+    }
     if (store_links !== undefined) {
       // Validate store links if provided
       if (store_links !== null && store_links !== undefined) {
@@ -1227,8 +1244,11 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
           }
 
           // Create physical item
+          // Calculate sort_name if not provided, but allow user override
+          const calculatedSortName = item.sort_name !== undefined ? item.sort_name : calculateSortName(item.name);
           const physicalItemData = {
             name: item.name,
+            sort_name: calculatedSortName || null,
             physical_format: JSON.stringify(formatArray),
             edition_notes: item.edition_notes,
             custom_image_url: item.custom_image_url,

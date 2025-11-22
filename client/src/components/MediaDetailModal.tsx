@@ -69,6 +69,14 @@ const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ physicalItem, isOpe
                     </div>
                   )}
 
+                  {/* Sort Name */}
+                  {physicalItem.sort_name && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Sort Name</h3>
+                      <p className="text-gray-900 dark:text-gray-100">{physicalItem.sort_name}</p>
+                    </div>
+                  )}
+
                   {/* Store Links */}
                   {physicalItem.store_links && physicalItem.store_links.length > 0 && (
                     <div>

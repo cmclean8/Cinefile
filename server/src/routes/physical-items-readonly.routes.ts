@@ -6,6 +6,7 @@ const router = Router();
 interface PhysicalItemWithMedia {
   id?: number;
   name: string;
+  sort_name?: string;
   physical_format: string | string[];
   edition_notes?: string;
   custom_image_url?: string;
@@ -153,8 +154,8 @@ router.get('/', async (req: Request, res: Response) => {
     const isSeriesSort = sort_by === 'series_sort';
     
     if (sort_by === 'title') {
-      // Sort by physical item name
-      query = query.orderBy('physical_items.name', sortDirection);
+      // Sort by physical item sort_name (fallback to name if sort_name is null)
+      query = query.orderByRaw('COALESCE(physical_items.sort_name, physical_items.name) ' + sortDirection);
     } else if (isSeriesSort) {
       // For series_sort, skip SQL-level sorting - will be handled after fetching series data
       // No orderBy clause here
@@ -467,9 +468,9 @@ router.get('/', async (req: Request, res: Response) => {
         const seriesA = getPrimarySeries(a);
         const seriesB = getPrimarySeries(b);
         
-        // Primary sort: Series sort_name (or physical item name if no series)
-        const primaryKeyA = seriesA?.sort_name || a.name || '';
-        const primaryKeyB = seriesB?.sort_name || b.name || '';
+        // Primary sort: Series sort_name (or physical item sort_name/name if no series)
+        const primaryKeyA = seriesA?.sort_name || a.sort_name || a.name || '';
+        const primaryKeyB = seriesB?.sort_name || b.sort_name || b.name || '';
         
         let primaryCompare = primaryKeyA.localeCompare(primaryKeyB, undefined, { sensitivity: 'base' });
         if (primaryCompare !== 0) {
@@ -541,8 +542,10 @@ router.get('/', async (req: Request, res: Response) => {
           
           // Compare secondary keys
           if (secondaryKeyA === null && secondaryKeyB === null) {
-            // Both null - fall back to physical item name
-            const nameCompare = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+            // Both null - fall back to physical item sort_name/name
+            const nameA = a.sort_name || a.name || '';
+            const nameB = b.sort_name || b.name || '';
+            const nameCompare = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
             return sortDirection === 'asc' ? nameCompare : -nameCompare;
           } else if (secondaryKeyA === null) {
             return sortDirection === 'asc' ? 1 : -1; // nulls last
@@ -561,8 +564,10 @@ router.get('/', async (req: Request, res: Response) => {
           }
         }
         
-        // Fallback: sort by physical item name
-        const nameCompare = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+        // Fallback: sort by physical item sort_name/name
+        const nameA = a.sort_name || a.name || '';
+        const nameB = b.sort_name || b.name || '';
+        const nameCompare = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
         return sortDirection === 'asc' ? nameCompare : -nameCompare;
       });
       
