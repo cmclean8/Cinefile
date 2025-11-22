@@ -6,6 +6,11 @@ echo "==========================="
 
 # Ensure data directories exist
 echo "📁 Creating data directories..."
+# Ensure /data base directory exists
+mkdir -p /data
+# Ensure database directory exists (extract directory from DATABASE_PATH)
+mkdir -p "$(dirname "$DATABASE_PATH")"
+# Ensure uploads directory exists
 mkdir -p /data/uploads
 echo "✅ Data directories ready"
 
