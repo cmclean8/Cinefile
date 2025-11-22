@@ -4,14 +4,59 @@ set -e
 echo "🎬 Cinefile - Starting..."
 echo "==========================="
 
+# Diagnostic: Log current user and environment
+echo "🔍 Diagnostic Information:"
+echo "   Current User ID: $(id -u)"
+echo "   Current Group ID: $(id -g)"
+echo "   Current User: $(id -un)"
+echo "   Current Group: $(id -gn)"
+echo "   DATABASE_PATH: ${DATABASE_PATH:-<not set>}"
+echo "   UPLOAD_DIR: ${UPLOAD_DIR:-<not set>}"
+echo ""
+
 # Ensure data directories exist
 echo "📁 Creating data directories..."
 # Ensure /data base directory exists
 mkdir -p /data
 # Ensure database directory exists (extract directory from DATABASE_PATH)
-mkdir -p "$(dirname "$DATABASE_PATH")"
+DB_DIR="$(dirname "$DATABASE_PATH")"
+mkdir -p "$DB_DIR"
 # Ensure uploads directory exists
 mkdir -p /data/uploads
+
+# Diagnostic: Check and log directory permissions
+echo "🔍 Directory Permissions Check:"
+echo "   /data directory exists: $([ -d /data ] && echo 'yes' || echo 'no')"
+echo "   /data is writable: $([ -w /data ] && echo 'yes' || echo 'no')"
+if [ -d /data ]; then
+  echo "   /data ownership: $(ls -ld /data | awk '{print $3":"$4}')"
+  echo "   /data permissions: $(ls -ld /data | awk '{print $1}')"
+fi
+
+echo "   Database directory ($DB_DIR) exists: $([ -d "$DB_DIR" ] && echo 'yes' || echo 'no')"
+echo "   Database directory is writable: $([ -w "$DB_DIR" ] && echo 'yes' || echo 'no')"
+if [ -d "$DB_DIR" ]; then
+  echo "   Database directory ownership: $(ls -ld "$DB_DIR" | awk '{print $3":"$4}')"
+  echo "   Database directory permissions: $(ls -ld "$DB_DIR" | awk '{print $1}')"
+fi
+
+echo "   /data/uploads exists: $([ -d /data/uploads ] && echo 'yes' || echo 'no')"
+echo "   /data/uploads is writable: $([ -w /data/uploads ] && echo 'yes' || echo 'no')"
+echo ""
+
+# Verify write permissions before proceeding
+if [ ! -w "$DB_DIR" ]; then
+  echo "❌ ERROR: Cannot write to database directory: $DB_DIR"
+  echo "   Current user: $(id -un) ($(id -u):$(id -g))"
+  if [ -d "$DB_DIR" ]; then
+    echo "   Directory owner: $(ls -ld "$DB_DIR" | awk '{print $3":"$4}')"
+    echo "   Directory permissions: $(ls -ld "$DB_DIR" | awk '{print $1}')"
+  fi
+  echo "   Please ensure the host volume directory is writable by user $(id -u):$(id -g)"
+  echo "   For example: sudo chown -R $(id -u):$(id -g) /opt/cinefile"
+  exit 1
+fi
+
 echo "✅ Data directories ready"
 
 # Check for required environment variables
@@ -29,6 +74,19 @@ fi
 echo ""
 echo "🗄️  Running database migrations..."
 
+# Diagnostic: Pre-migration checks
+echo "🔍 Pre-migration Diagnostics:"
+echo "   Database path: $DATABASE_PATH"
+echo "   Database directory exists: $([ -d "$(dirname "$DATABASE_PATH")" ] && echo 'yes' || echo 'no')"
+echo "   Database directory is writable: $([ -w "$(dirname "$DATABASE_PATH")" ] && echo 'yes' || echo 'no')"
+echo "   Database file exists: $([ -f "$DATABASE_PATH" ] && echo 'yes' || echo 'no')"
+if [ -f "$DATABASE_PATH" ]; then
+  echo "   Database file size: $(du -h "$DATABASE_PATH" | cut -f1)"
+  echo "   Database file permissions: $(ls -l "$DATABASE_PATH" | awk '{print $1}')"
+  echo "   Database file ownership: $(ls -l "$DATABASE_PATH" | awk '{print $3":"$4}')"
+fi
+echo ""
+
 # Check data integrity before migrations
 if [ -f "$DATABASE_PATH" ]; then
   echo "🔍 Pre-migration data check..."
@@ -44,7 +102,12 @@ if [ -f "$DATABASE_PATH" ]; then
   fi
 fi
 
-if npx knex migrate:latest; then
+# Run migrations with error capture
+echo "🔄 Executing database migrations..."
+MIGRATION_OUTPUT=$(npx knex migrate:latest 2>&1)
+MIGRATION_EXIT_CODE=$?
+
+if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
   echo "✅ Database migrations completed successfully"
   
   # Verify data integrity after migrations
@@ -62,6 +125,36 @@ if npx knex migrate:latest; then
   fi
 else
   echo "❌ Database migrations failed!"
+  echo ""
+  echo "🔍 Error Details:"
+  echo "   Exit code: $MIGRATION_EXIT_CODE"
+  echo "   Current User: $(id -un) ($(id -u):$(id -g))"
+  echo "   Database Path: $DATABASE_PATH"
+  echo "   Database Directory: $(dirname "$DATABASE_PATH")"
+  echo "   Database Directory Exists: $([ -d "$(dirname "$DATABASE_PATH")" ] && echo 'yes' || echo 'no')"
+  echo "   Database Directory Writable: $([ -w "$(dirname "$DATABASE_PATH")" ] && echo 'yes' || echo 'no')"
+  if [ -d "$(dirname "$DATABASE_PATH")" ]; then
+    echo "   Database Directory Ownership: $(ls -ld "$(dirname "$DATABASE_PATH")" | awk '{print $3":"$4}')"
+    echo "   Database Directory Permissions: $(ls -ld "$(dirname "$DATABASE_PATH")" | awk '{print $1}')"
+  fi
+  if [ -f "$DATABASE_PATH" ]; then
+    echo "   Database File Exists: yes"
+    echo "   Database File Ownership: $(ls -l "$DATABASE_PATH" | awk '{print $3":"$4}')"
+    echo "   Database File Permissions: $(ls -l "$DATABASE_PATH" | awk '{print $1}')"
+  else
+    echo "   Database File Exists: no"
+  fi
+  echo ""
+  echo "📋 Full Error Output:"
+  echo "----------------------------------------"
+  echo "$MIGRATION_OUTPUT"
+  echo "----------------------------------------"
+  echo ""
+  echo "💡 Troubleshooting Tips:"
+  echo "   1. Ensure the host volume directory is writable by user $(id -u):$(id -g)"
+  echo "   2. Check that the database directory exists and has correct permissions"
+  echo "   3. Verify DATABASE_PATH environment variable is set correctly"
+  echo "   4. If using a volume mount, ensure the host directory exists and is accessible"
   exit 1
 fi
 
