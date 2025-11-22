@@ -74,6 +74,7 @@ COPY --from=frontend-builder /app/client/dist ./public
 # Create non-root user for security
 RUN addgroup -g 1001 nodejs && \
     adduser -S nodejs -u 1001 && \
+    apk add --no-cache su-exec && \
     mkdir -p /data /data/uploads && \
     chown -R nodejs:nodejs /app /data
 
@@ -81,8 +82,9 @@ RUN addgroup -g 1001 nodejs && \
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
-# Switch to non-root user
-USER nodejs
+# Don't switch to non-root user here - let entrypoint handle it
+# This allows entrypoint to fix permissions on volume mounts
+# USER nodejs
 
 # Expose both ports
 EXPOSE 3000 3001

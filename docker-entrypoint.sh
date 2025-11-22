@@ -1,6 +1,29 @@
 #!/bin/sh
 set -e
 
+# Permission fix: If running as root, fix permissions and drop to nodejs user
+if [ "$(id -u)" = "0" ]; then
+  echo "🔧 Running as root - fixing permissions on /data..."
+  
+  # Ensure data directories exist
+  mkdir -p /data
+  DB_DIR="$(dirname "${DATABASE_PATH:-/data/database.sqlite}")"
+  mkdir -p "$DB_DIR"
+  mkdir -p /data/uploads
+  
+  # Fix ownership to nodejs user (UID 1001, GID 1001)
+  chown -R 1001:1001 /data 2>/dev/null || true
+  
+  # Ensure directories are writable
+  chmod -R 755 /data 2>/dev/null || true
+  
+  echo "✅ Permissions fixed. Dropping to nodejs user..."
+  
+  # Re-exec this script as nodejs user
+  exec su-exec nodejs "$0" "$@"
+fi
+
+# Rest of the script continues here (now running as nodejs user)
 echo "🎬 Cinefile - Starting..."
 echo "==========================="
 
