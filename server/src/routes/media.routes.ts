@@ -310,7 +310,7 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
       }
 
       // Validate each format
-      const validFormats = ['4K UHD', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
+      const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
       for (const format of formatArray) {
         if (!validFormats.includes(format)) {
           return res.status(400).json({ 
@@ -459,7 +459,7 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
         }
 
         // Validate each format
-        const validFormats = ['4K UHD', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
+        const validFormats = ['4K UHD', '3D Blu-ray', 'Blu-ray', 'DVD', 'Digital-HD', 'Digital-SD', 'Digital-UHD', 'LaserDisc', 'VHS'];
         for (const format of formatArray) {
           if (!validFormats.includes(format)) {
             throw new Error(`Invalid physical format: ${format}. Must be one of: ${validFormats.join(', ')}`);
