@@ -145,6 +145,9 @@ Cinefile runs two servers in one container:
 
 Both servers share the same database, but the read-only server cannot modify data by design.
 
+## AI Disclosure
+Cinefile was generated almost entirely by a combination of Cursor's Compooser and Google's Gemini 2.5 and 3.0 and Claude Ops 4.5 models. As a hobby project, I am deliberately using it as a testing ground to 'feel' out the capabilities of current LLM models. If this is not to your taste or preferences, I completely understand but I am disclosing this for transparency reasons. I'm committed to building a good products, and this is a low stakes way for me to try new tools. 
+
 ## License
 
 MIT
