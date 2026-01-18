@@ -20,6 +20,8 @@ interface MediaExportRow {
   formats: string;
   disc_number: number | null;
   edition_notes: string | null;
+  notes: string | null;
+  notes_public: boolean | number | null;
   purchase_date: string | null;
   store_links: string | null;
   custom_image_url: string | null;
@@ -41,6 +43,8 @@ interface MediaImportRow {
   series?: string;
   disc_number?: string | number;
   edition_notes?: string;
+  notes?: string;
+  notes_public?: string | boolean;
   purchase_date?: string;
   store_links?: string;
   custom_image_url?: string;
@@ -212,6 +216,20 @@ router.get('/schema', (req: Request, res: Response) => {
         example: 'Steelbook Edition',
       },
       {
+        name: 'notes',
+        type: 'text',
+        required: false,
+        description: 'Personal notes about the physical item (max 2000 characters)',
+        example: 'This is my favorite version for its audio quality',
+      },
+      {
+        name: 'notes_public',
+        type: 'boolean',
+        required: false,
+        description: 'Whether notes are visible to public viewers. Defaults to false (private).',
+        example: 'true',
+      },
+      {
         name: 'purchase_date',
         type: 'date',
         required: false,
@@ -273,6 +291,8 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
       .select(
         'physical_items.name as physical_item_name',
         'physical_items.edition_notes',
+        'physical_items.notes',
+        'physical_items.notes_public',
         'physical_items.purchase_date',
         'physical_items.store_links',
         'physical_items.custom_image_url',
@@ -297,6 +317,8 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
         'media.id',
         'physical_items.name',
         'physical_items.edition_notes',
+        'physical_items.notes',
+        'physical_items.notes_public',
         'physical_items.purchase_date',
         'physical_items.store_links',
         'physical_items.custom_image_url',
@@ -332,6 +354,8 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
       'formats',
       'disc_number',
       'edition_notes',
+      'notes',
+      'notes_public',
       'purchase_date',
       'store_links',
       'custom_image_url',
@@ -366,6 +390,8 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
         escapeCSV(item.formats), // Already JSON string in DB
         escapeCSV(item.disc_number),
         escapeCSV(item.edition_notes),
+        escapeCSV(item.notes),
+        escapeCSV(item.notes_public ? 'true' : 'false'),
         escapeCSV(item.purchase_date),
         escapeCSV(item.store_links), // Already JSON string in DB
         escapeCSV(item.custom_image_url),
@@ -615,11 +641,18 @@ router.post('/import', authMiddleware, async (req: Request, res: Response) => {
           
           if (!physicalItem) {
             // Create new physical item
+            // Parse notes_public - accept 'true', '1', true, or 1 as true values
+            const notesPublicValue = movies[0].notes_public;
+            const isNotesPublic = notesPublicValue === 'true' || notesPublicValue === '1' || 
+                                  notesPublicValue === true || notesPublicValue === 1;
+            
             const physicalItemData = {
               name: itemName,
               sort_name: calculateSortName(itemName) || null,
               physical_format: JSON.stringify([]), // Will be updated after processing movies
               edition_notes: movies[0].edition_notes || null,
+              notes: movies[0].notes || null,
+              notes_public: isNotesPublic ? 1 : 0,
               purchase_date: movies[0].purchase_date || null,
               store_links: movies[0].store_links || null,
               custom_image_url: movies[0].custom_image_url || null,

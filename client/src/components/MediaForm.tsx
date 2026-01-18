@@ -46,6 +46,8 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
     name: '',
     sort_name: '',
     edition_notes: '',
+    notes: '',
+    notes_public: false,
     custom_image_url: '',
     purchase_date: '',
     primary_series_id: undefined as number | undefined,
@@ -73,6 +75,8 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         name: editItem.name,
         sort_name: editItem.sort_name || '',
         edition_notes: editItem.edition_notes || '',
+        notes: editItem.notes || '',
+        notes_public: editItem.notes_public || false,
         custom_image_url: editItem.custom_image_url || '',
         purchase_date: editItem.purchase_date || '',
         primary_series_id: editItem.primary_series_id,
@@ -130,6 +134,8 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         name: '',
         sort_name: '',
         edition_notes: '',
+        notes: '',
+        notes_public: false,
         custom_image_url: '',
         purchase_date: '',
         primary_series_id: undefined,
@@ -437,6 +443,8 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           name: finalName,
           sort_name: formData.sort_name || undefined,
           edition_notes: formData.edition_notes,
+          notes: formData.notes || undefined,
+          notes_public: formData.notes_public,
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
           store_links: storeLinks,
@@ -534,6 +542,8 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           name: finalName,
           sort_name: formData.sort_name || undefined,
           edition_notes: formData.edition_notes,
+          notes: formData.notes || undefined,
+          notes_public: formData.notes_public,
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
           store_links: storeLinks,
@@ -803,6 +813,43 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
                       onChange={(e) => setFormData({ ...formData, edition_notes: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
+                  </div>
+
+                  {/* Personal Notes */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Personal Notes
+                    </label>
+                    <textarea
+                      placeholder="e.g., This is my favorite version for its audio quality..."
+                      value={formData.notes}
+                      onChange={(e) => {
+                        if (e.target.value.length <= 2000) {
+                          setFormData({ ...formData, notes: e.target.value });
+                        }
+                      }}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                    />
+                    <div className="flex justify-between items-center mt-1">
+                      <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                        <input
+                          type="checkbox"
+                          checked={formData.notes_public}
+                          onChange={(e) => setFormData({ ...formData, notes_public: e.target.checked })}
+                          className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                        />
+                        Make notes public
+                      </label>
+                      <span className={`text-xs ${formData.notes.length > 1900 ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                        {formData.notes.length}/2000
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {formData.notes_public 
+                        ? 'Notes will be visible to anyone viewing your collection.' 
+                        : 'Notes are private and only visible when logged in.'}
+                    </p>
                   </div>
 
                   {/* Store Links */}

@@ -11,6 +11,8 @@ interface PhysicalItem {
   sort_name?: string;
   physical_format: string; // JSON string of array
   edition_notes?: string;
+  notes?: string;
+  notes_public?: boolean;
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: string; // JSON string of array
@@ -648,7 +650,12 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { name, edition_notes, custom_image_url, purchase_date, media, store_links, primary_series_id, sort_name } = req.body;
+    const { name, edition_notes, notes, notes_public, custom_image_url, purchase_date, media, store_links, primary_series_id, sort_name } = req.body;
+
+    // Validate notes length (max 2000 characters)
+    if (notes && typeof notes === 'string' && notes.length > 2000) {
+      return res.status(400).json({ error: 'Notes cannot exceed 2000 characters' });
+    }
 
     // Validation function for store links
     const validateStoreLinks = (links: any[]): boolean => {
@@ -712,6 +719,8 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         sort_name: calculatedSortName || null,
         physical_format: JSON.stringify([]), // Will be updated after linking media
         edition_notes,
+        notes: notes || null,
+        notes_public: notes_public === true ? 1 : 0, // SQLite boolean
         custom_image_url,
         purchase_date,
         store_links: store_links ? JSON.stringify(store_links) : null,
@@ -816,9 +825,14 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, physical_format, edition_notes, custom_image_url, purchase_date, store_links, primary_series_id, sort_name } = req.body;
+    const { name, physical_format, edition_notes, notes, notes_public, custom_image_url, purchase_date, store_links, primary_series_id, sort_name } = req.body;
 
     console.log('PUT /api/physical-items/:id', { id, body: req.body });
+
+    // Validate notes length (max 2000 characters)
+    if (notes !== undefined && notes !== null && typeof notes === 'string' && notes.length > 2000) {
+      return res.status(400).json({ error: 'Notes cannot exceed 2000 characters' });
+    }
 
     // Check if physical item exists
     const existingItem = await db('physical_items').where('id', id).first();
@@ -858,6 +872,8 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
 
     if (name !== undefined) updateData.name = name;
     if (edition_notes !== undefined) updateData.edition_notes = edition_notes;
+    if (notes !== undefined) updateData.notes = notes || null;
+    if (notes_public !== undefined) updateData.notes_public = notes_public === true ? 1 : 0; // SQLite boolean
     if (custom_image_url !== undefined) updateData.custom_image_url = custom_image_url;
     if (purchase_date !== undefined) updateData.purchase_date = purchase_date;
     if (primary_series_id !== undefined) updateData.primary_series_id = primary_series_id || null;

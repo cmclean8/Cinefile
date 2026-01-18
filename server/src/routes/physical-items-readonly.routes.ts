@@ -9,6 +9,7 @@ interface PhysicalItemWithMedia {
   sort_name?: string;
   physical_format: string | string[];
   edition_notes?: string;
+  notes?: string;
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: string | any[];
@@ -432,12 +433,17 @@ router.get('/', async (req: Request, res: Response) => {
       }));
 
       // Clean up the aggregated fields from the main query
-      const cleanedItem = {
+      // Only include notes if notes_public is true (public view)
+      const cleanedItem: PhysicalItemWithMedia = {
         ...item,
         physical_format: item.physical_format ? (typeof item.physical_format === 'string' ? JSON.parse(item.physical_format) : item.physical_format) : [],
         store_links: item.store_links ? (typeof item.store_links === 'string' ? JSON.parse(item.store_links) : item.store_links) : [],
+        notes: item.notes_public ? item.notes : undefined,
         media,
       };
+      
+      // Remove notes_public from response (public users don't need to see this flag)
+      delete (cleanedItem as any).notes_public;
 
       return cleanedItem;
     });
@@ -624,12 +630,17 @@ router.get('/:id', async (req: Request, res: Response) => {
       formats: m.formats ? JSON.parse(m.formats) : [],
     }));
 
+    // Only include notes if notes_public is true (public view)
     const result: PhysicalItemWithMedia = {
       ...physicalItem,
       physical_format: JSON.parse(physicalItem.physical_format),
       store_links: physicalItem.store_links ? JSON.parse(physicalItem.store_links) : [],
+      notes: physicalItem.notes_public ? physicalItem.notes : undefined,
       media,
     };
+    
+    // Remove notes_public from response (public users don't need to see this flag)
+    delete (result as any).notes_public;
 
     res.json(result);
   } catch (error) {

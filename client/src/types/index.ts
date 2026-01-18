@@ -77,6 +77,8 @@ export interface PhysicalItem {
   sort_name?: string;
   physical_format: string[];
   edition_notes?: string;
+  notes?: string;
+  notes_public?: boolean;
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: Array<{label: string; url: string}>;
@@ -90,6 +92,8 @@ export interface CreatePhysicalItemDto {
   name: string;
   sort_name?: string;
   edition_notes?: string;
+  notes?: string;
+  notes_public?: boolean;
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: Array<{label: string; url: string}>;
