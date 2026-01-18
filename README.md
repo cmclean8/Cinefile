@@ -5,6 +5,7 @@ A simple, clean, and modern self-hosted web application for cataloging and displ
 ## Features
 
 - **Media Management**: Add, edit, and delete entries with TMDb API integration
+- **Poster Selection**: Choose from all available movie posters on TMDB when editing items
 - **Multiple Formats**: Support for 4K UHD, 3D Blu-ray, Blu-ray, DVD, Digital-UHD, Digital-HD, Digital-SD, LaserDisc, and VHS
 - **CSV Import/Export**: Backup and restore your collection with full metadata
 - **Beautiful Gallery**: Responsive collection view with cover art and filtering
