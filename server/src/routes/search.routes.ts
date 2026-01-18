@@ -58,6 +58,27 @@ router.get('/movies/:id', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/search/movies/:id/posters
+ * Get posters for a movie from TMDb
+ */
+router.get('/movies/:id/posters', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const movieId = parseInt(id, 10);
+
+    if (isNaN(movieId)) {
+      return res.status(400).json({ error: 'Invalid movie ID' });
+    }
+
+    const posters = await tmdbService.getMovieImages(movieId);
+    res.json(posters);
+  } catch (error) {
+    console.error('Error fetching movie posters:', error);
+    res.status(500).json({ error: 'Failed to fetch movie posters' });
+  }
+});
+
+/**
  * POST /api/search/bulk-movies
  * Search for multiple movies on TMDb with retry logic and rate limiting
  */

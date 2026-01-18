@@ -143,6 +143,11 @@ class ApiService {
     return response.data;
   }
 
+  async getMoviePosters(tmdbId: number): Promise<string[]> {
+    const response = await this.api.get<string[]>(`/search/movies/${tmdbId}/posters`);
+    return response.data;
+  }
+
   async getTMDbCollections(tmdbId: number): Promise<any> {
     const response = await this.api.get(`/search/movies/${tmdbId}/collections`);
     return response.data;

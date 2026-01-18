@@ -183,6 +183,32 @@ class TMDbService {
   }
 
   /**
+   * Get images for a movie
+   */
+  async getMovieImages(movieId: number): Promise<string[]> {
+    this.log(`Fetching images for movie ID: ${movieId}`);
+    try {
+      const response = await this.makeRequest(() =>
+        axios.get(`${TMDB_BASE_URL}/movie/${movieId}/images`, {
+          params: {
+            api_key: this.apiKey,
+          },
+        })
+      );
+      
+      const posters = response.data.posters || [];
+      // Sort by vote average (popularity)
+      posters.sort((a: any, b: any) => b.vote_average - a.vote_average);
+      
+      return posters.map((poster: any) => this.getImageUrl(poster.file_path, 'w500')).filter((url: string | null) => url !== null) as string[];
+    } catch (error) {
+      this.log(`Failed to fetch images for movie ID ${movieId}: ${error}`, 'error');
+      // Return empty array instead of throwing, so the UI can just show no images
+      return [];
+    }
+  }
+
+  /**
    * Get full image URL from TMDb path
    */
   getImageUrl(path: string | null, size: 'w500' | 'w780' | 'original' = 'w500'): string | null {

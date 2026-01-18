@@ -5,6 +5,7 @@ import UnifiedSearchModal from './UnifiedSearchModal';
 import StoreLinkManager from './StoreLinkManager';
 import MediaEditModal from './MediaEditModal';
 import FormatSelector from './FormatSelector';
+import PosterSelector from './PosterSelector';
 
 interface MediaFormProps {
   isOpen: boolean;
@@ -34,6 +35,12 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
   const [showFormatSelector, setShowFormatSelector] = useState(false);
   const [editingFormatsFor, setEditingFormatsFor] = useState<number | null>(null);
   const [originalFormats, setOriginalFormats] = useState<string[]>([]);
+  
+  // Poster selection state
+  const [showPosterSelector, setShowPosterSelector] = useState(false);
+  const [posterSelectorMovieId, setPosterSelectorMovieId] = useState<number | null>(null);
+  const [showMovieSelectionForPoster, setShowMovieSelectionForPoster] = useState(false);
+
   const [formData, setFormData] = useState({
     // Physical item fields
     name: '',
@@ -339,6 +346,26 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
     setOriginalFormats([]);
   };
 
+  const handleSelectPosterClick = () => {
+    if (selectedMovies.length === 0) {
+      alert('Please select a movie first to choose a poster.');
+      return;
+    }
+
+    if (selectedMovies.length === 1) {
+      setPosterSelectorMovieId(selectedMovies[0].movie.id);
+      setShowPosterSelector(true);
+    } else {
+      setShowMovieSelectionForPoster(true);
+    }
+  };
+
+  const handlePosterSelected = (url: string) => {
+    setFormData({ ...formData, custom_image_url: url });
+    setShowPosterSelector(false);
+    setPosterSelectorMovieId(null);
+  };
+
   const handleMediaSaved = (updatedMedia: Media) => {
     // Update the movie in selectedMovies list
     setSelectedMovies(prev => prev.map(m => 
@@ -582,7 +609,19 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
 
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Upload Custom Image
+                      Custom Image
+                    </label>
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        type="button"
+                        onClick={handleSelectPosterClick}
+                        className="flex-1 btn-secondary text-sm"
+                      >
+                        Select Poster
+                      </button>
+                    </div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      Or upload your own:
                     </label>
                     <input
                       type="file"
@@ -827,6 +866,57 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         movieTitle={editingFormatsFor ? selectedMovies.find(m => m.movie.id === editingFormatsFor)?.movie.title || '' : ''}
         initialFormats={editingFormatsFor ? selectedMovies.find(m => m.movie.id === editingFormatsFor)?.formats || [] : []}
       />
+
+      {/* Poster Selector */}
+      {showPosterSelector && posterSelectorMovieId && (
+        <PosterSelector
+          tmdbId={posterSelectorMovieId}
+          movieTitle={selectedMovies.find(m => m.movie.id === posterSelectorMovieId)?.movie.title || ''}
+          onSelect={handlePosterSelected}
+          onClose={() => {
+            setShowPosterSelector(false);
+            setPosterSelectorMovieId(null);
+          }}
+          currentPosterUrl={formData.custom_image_url}
+        />
+      )}
+
+      {/* Movie Selection for Poster Modal */}
+      {showMovieSelectionForPoster && (
+        <div className="fixed inset-0 z-[60] overflow-y-auto">
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowMovieSelectionForPoster(false)} />
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+                Choose movie for poster
+              </h3>
+              <div className="space-y-2">
+                {selectedMovies.map((movie) => (
+                  <button
+                    key={movie.movie.id}
+                    onClick={() => {
+                      setPosterSelectorMovieId(movie.movie.id);
+                      setShowMovieSelectionForPoster(false);
+                      setShowPosterSelector(true);
+                    }}
+                    className="w-full text-left px-4 py-3 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-gray-900 dark:text-gray-100"
+                  >
+                    {movie.movie.title}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => setShowMovieSelectionForPoster(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

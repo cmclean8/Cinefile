@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Media, Series } from '../types';
 import { apiService } from '../services/api.service';
+import PosterSelector from './PosterSelector';
 
 interface MediaEditModalProps {
   media: Media | null;
@@ -28,6 +29,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ media, isOpen, onClose,
   const [tmdbData, setTmdbData] = useState<TMDBComparison | null>(null);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showPosterSelector, setShowPosterSelector] = useState(false);
   
   // Series management state
   const [availableSeries, setAvailableSeries] = useState<Series[]>([]);
@@ -191,6 +193,19 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ media, isOpen, onClose,
     if (selectedSeriesIds.includes(seriesId)) {
       setPrimarySeriesId(seriesId === primarySeriesId ? undefined : seriesId);
     }
+  };
+
+  const handleSelectPosterClick = () => {
+    if (!media?.tmdb_id) {
+      alert('This media item is not linked to TMDB.');
+      return;
+    }
+    setShowPosterSelector(true);
+  };
+
+  const handlePosterSelected = (url: string) => {
+    setFormData(prev => ({ ...prev, cover_art_url: url }));
+    setShowPosterSelector(false);
   };
 
   // Filter available series for dropdown
@@ -363,6 +378,17 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ media, isOpen, onClose,
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Cover Art URL
                     </label>
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        type="button"
+                        onClick={handleSelectPosterClick}
+                        disabled={!media?.tmdb_id}
+                        className="btn-secondary text-sm flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={!media?.tmdb_id ? 'Not linked to TMDB' : 'Select alternative poster from TMDB'}
+                      >
+                        Select Poster
+                      </button>
+                    </div>
                     <input
                       type="url"
                       value={formData.cover_art_url}
@@ -584,6 +610,17 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ media, isOpen, onClose,
           </div>
         </div>
       </div>
+
+      {/* Poster Selector */}
+      {showPosterSelector && media?.tmdb_id && (
+        <PosterSelector
+          tmdbId={media.tmdb_id}
+          movieTitle={media.title}
+          onSelect={handlePosterSelected}
+          onClose={() => setShowPosterSelector(false)}
+          currentPosterUrl={formData.cover_art_url}
+        />
+      )}
     </div>
   );
 };
