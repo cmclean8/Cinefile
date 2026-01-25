@@ -82,7 +82,8 @@ export interface PhysicalItem {
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: Array<{label: string; url: string}>;
-  primary_series_id?: number;
+  primary_series_id?: number; // Legacy - still present but being phased out
+  sort_series_id?: number; // Used for sorting by series
   created_at?: string;
   updated_at?: string;
   media: Media[]; // Linked media entries
@@ -97,7 +98,8 @@ export interface CreatePhysicalItemDto {
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: Array<{label: string; url: string}>;
-  primary_series_id?: number;
+  sort_series_id?: number; // Used for sorting by series
+  media_primary_series_id?: number; // When set, adds all media to this series
   media: {
     id?: number; // If linking to existing media
     title?: string; // If creating new media

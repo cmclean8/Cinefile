@@ -50,7 +50,13 @@ A **Movie** represents the film itself - the artistic work independent of its ph
 
 ### Series
 
-A **Series** represents acollection of related content such as the "Marvel Cinematic Universe" or "Wes Anderson Collefction." Like movies, multiple physical items can reference the same series (complete series collections, etc.).
+A **Series** represents a collection of related content such as the "Marvel Cinematic Universe" or "Wes Anderson Collection." Like movies, multiple physical items can reference the same series (complete series collections, etc.).
+
+When editing a physical item, you have two series-related options:
+
+- **Primary Series**: Setting this will automatically add all movies in the physical item to the selected series and set it as their primary series. This is the main way to manage which series movies belong to.
+
+- **Sort Series**: This is a sorting preference for the physical item. When you sort your collection by series, items are grouped by their Sort Series value. This is useful when a physical item contains movies from multiple series and you want to control how it's sorted.
 
 ### Physical Formats
 

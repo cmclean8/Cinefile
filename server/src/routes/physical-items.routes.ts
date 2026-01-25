@@ -16,7 +16,8 @@ interface PhysicalItem {
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: string; // JSON string of array
-  primary_series_id?: number | null;
+  primary_series_id?: number | null; // Legacy - still used but being phased out
+  sort_series_id?: number | null; // Used for sorting by series
   created_at?: string;
   updated_at?: string;
 }
@@ -337,9 +338,9 @@ router.get('/', async (req: Request, res: Response) => {
     let mediaSeriesMap = new Map<number, any[]>(); // media_id -> array of {series_id, sort_order}
     
     if (isSeriesSort && itemIds.length > 0) {
-      // Fetch series data for physical items (via primary_series_id)
+      // Fetch series data for physical items (via sort_series_id, falling back to primary_series_id for legacy)
       const physicalItemSeriesIds = physicalItems
-        .map(item => item.primary_series_id)
+        .map(item => item.sort_series_id || item.primary_series_id)
         .filter(id => id !== null && id !== undefined) as number[];
       
       // Also get series IDs from media's primary_series_id or movie_series associations
@@ -453,9 +454,10 @@ router.get('/', async (req: Request, res: Response) => {
       physicalItemsWithMedia.sort((a, b) => {
         // Determine primary series for each item
         const getPrimarySeries = (item: PhysicalItemWithMedia) => {
-          // First check physical item's primary_series_id
-          if (item.primary_series_id) {
-            return seriesMap.get(item.primary_series_id);
+          // First check physical item's sort_series_id (or legacy primary_series_id)
+          const sortSeriesId = item.sort_series_id || item.primary_series_id;
+          if (sortSeriesId) {
+            return seriesMap.get(sortSeriesId);
           }
           
           // Otherwise, check if any media has a primary_series_id or series association
@@ -650,7 +652,12 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { name, edition_notes, notes, notes_public, custom_image_url, purchase_date, media, store_links, primary_series_id, sort_name } = req.body;
+    const { 
+      name, edition_notes, notes, notes_public, custom_image_url, purchase_date, 
+      media, store_links, sort_name,
+      sort_series_id, // Used for sorting preference
+      media_primary_series_id // When set, adds all media to this series and sets it as their primary
+    } = req.body;
 
     // Validate notes length (max 2000 characters)
     if (notes && typeof notes === 'string' && notes.length > 2000) {
@@ -703,11 +710,19 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     // Start a transaction
     const result = await db.transaction(async (trx) => {
-      // Validate primary_series_id if provided
-      if (primary_series_id !== undefined && primary_series_id !== null) {
-        const seriesExists = await trx('series').where({ id: primary_series_id }).first();
+      // Validate sort_series_id if provided
+      if (sort_series_id !== undefined && sort_series_id !== null) {
+        const seriesExists = await trx('series').where({ id: sort_series_id }).first();
         if (!seriesExists) {
-          throw new Error('Primary series not found');
+          throw new Error('Sort series not found');
+        }
+      }
+      
+      // Validate media_primary_series_id if provided
+      if (media_primary_series_id !== undefined && media_primary_series_id !== null) {
+        const seriesExists = await trx('series').where({ id: media_primary_series_id }).first();
+        if (!seriesExists) {
+          throw new Error('Series not found');
         }
       }
 
@@ -724,7 +739,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         custom_image_url,
         purchase_date,
         store_links: store_links ? JSON.stringify(store_links) : null,
-        primary_series_id: primary_series_id || null,
+        sort_series_id: sort_series_id || null,
       };
 
       const [physicalItemId] = await trx('physical_items').insert(physicalItemData);
@@ -793,6 +808,37 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
           physical_format: JSON.stringify(Array.from(allFormats).sort())
         });
 
+      // Handle media_primary_series_id: add all media to series and set as their primary
+      if (media_primary_series_id !== undefined && media_primary_series_id !== null) {
+        // Get all media IDs that were just linked
+        const linkedMediaIds = await trx('physical_item_media')
+          .where('physical_item_id', physicalItemId)
+          .select('media_id');
+        
+        for (const { media_id: mediaId } of linkedMediaIds) {
+          // Add to series if not already there
+          const existingAssoc = await trx('movie_series')
+            .where({ media_id: mediaId, series_id: media_primary_series_id })
+            .first();
+          
+          if (!existingAssoc) {
+            await trx('movie_series').insert({
+              media_id: mediaId,
+              series_id: media_primary_series_id,
+              auto_sort: true,
+            });
+          }
+          
+          // Set this as the primary series for the media
+          await trx('media')
+            .where({ id: mediaId })
+            .update({ 
+              primary_series_id: media_primary_series_id,
+              updated_at: trx.fn.now()
+            });
+        }
+      }
+
       // Fetch the created physical item with media
       const createdItem = await trx('physical_items').where('id', physicalItemId).first();
       const linkedMedia = await trx('physical_item_media')
@@ -825,7 +871,12 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, physical_format, edition_notes, notes, notes_public, custom_image_url, purchase_date, store_links, primary_series_id, sort_name } = req.body;
+    const { 
+      name, physical_format, edition_notes, notes, notes_public, 
+      custom_image_url, purchase_date, store_links, sort_name,
+      sort_series_id, // Used for sorting preference
+      media_primary_series_id // When set, adds all media to this series and sets it as their primary
+    } = req.body;
 
     console.log('PUT /api/physical-items/:id', { id, body: req.body });
 
@@ -840,30 +891,51 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Physical item not found' });
     }
 
-    // Validate primary_series_id if provided
-    if (primary_series_id !== undefined && primary_series_id !== null) {
-      const seriesExists = await db('series').where({ id: primary_series_id }).first();
+    // Handle media_primary_series_id: add all media to series and set as their primary
+    if (media_primary_series_id !== undefined && media_primary_series_id !== null) {
+      const seriesExists = await db('series').where({ id: media_primary_series_id }).first();
       if (!seriesExists) {
-        return res.status(400).json({ error: 'Primary series not found' });
+        return res.status(400).json({ error: 'Series not found' });
       }
       
-      // Only validate media belongs to series if there are media links
-      // Allow setting primary_series_id even if no media is linked yet
-      const hasMediaLinks = await db('physical_item_media')
+      // Get all media IDs linked to this physical item
+      const linkedMedia = await db('physical_item_media')
         .where('physical_item_id', id)
-        .first();
+        .select('media_id');
       
-      if (hasMediaLinks) {
-        // Validate that at least one media in this physical item belongs to the primary series
-        const mediaInSeries = await db('physical_item_media')
-          .join('movie_series', 'physical_item_media.media_id', 'movie_series.media_id')
-          .where('physical_item_media.physical_item_id', id)
-          .where('movie_series.series_id', primary_series_id)
-          .first();
-        
-        if (!mediaInSeries) {
-          return res.status(400).json({ error: 'None of the media in this physical item belongs to the specified primary series' });
+      const mediaIds = linkedMedia.map((m: any) => m.media_id);
+      
+      if (mediaIds.length > 0) {
+        // For each media, add to the series if not already there
+        for (const mediaId of mediaIds) {
+          const existingAssoc = await db('movie_series')
+            .where({ media_id: mediaId, series_id: media_primary_series_id })
+            .first();
+          
+          if (!existingAssoc) {
+            await db('movie_series').insert({
+              media_id: mediaId,
+              series_id: media_primary_series_id,
+              auto_sort: true,
+            });
+          }
+          
+          // Set this as the primary series for the media
+          await db('media')
+            .where({ id: mediaId })
+            .update({ 
+              primary_series_id: media_primary_series_id,
+              updated_at: db.fn.now()
+            });
         }
+      }
+    }
+
+    // Validate sort_series_id if provided (just check series exists)
+    if (sort_series_id !== undefined && sort_series_id !== null) {
+      const seriesExists = await db('series').where({ id: sort_series_id }).first();
+      if (!seriesExists) {
+        return res.status(400).json({ error: 'Sort series not found' });
       }
     }
 
@@ -876,7 +948,7 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
     if (notes_public !== undefined) updateData.notes_public = notes_public === true ? 1 : 0; // SQLite boolean
     if (custom_image_url !== undefined) updateData.custom_image_url = custom_image_url;
     if (purchase_date !== undefined) updateData.purchase_date = purchase_date;
-    if (primary_series_id !== undefined) updateData.primary_series_id = primary_series_id || null;
+    if (sort_series_id !== undefined) updateData.sort_series_id = sort_series_id || null;
     
     // Handle sort_name: if explicitly provided, use it; otherwise recalculate if name changed
     if (sort_name !== undefined) {
@@ -965,10 +1037,6 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     console.error('Error updating physical item:', error);
-    console.error('Error details:', {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    });
     res.status(500).json({ error: 'Failed to update physical item' });
   }
 });

@@ -50,7 +50,8 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
     notes_public: false,
     custom_image_url: '',
     purchase_date: '',
-    primary_series_id: undefined as number | undefined,
+    media_primary_series_id: undefined as number | undefined, // Adds movies to series
+    sort_series_id: undefined as number | undefined, // Used for sorting
   });
   const [availableSeries, setAvailableSeries] = useState<Series[]>([]);
 
@@ -79,7 +80,8 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         notes_public: editItem.notes_public || false,
         custom_image_url: editItem.custom_image_url || '',
         purchase_date: editItem.purchase_date || '',
-        primary_series_id: editItem.primary_series_id,
+        media_primary_series_id: undefined, // Don't pre-fill - this is an action, not stored state
+        sort_series_id: editItem.sort_series_id || editItem.primary_series_id, // Fallback to legacy
       });
       
       // Convert existing media to MovieWithFormats format for display
@@ -138,7 +140,8 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         notes_public: false,
         custom_image_url: '',
         purchase_date: '',
-        primary_series_id: undefined,
+        media_primary_series_id: undefined,
+        sort_series_id: undefined,
       });
       setSelectedMovies([]);
       setMovieDetails(new Map());
@@ -438,6 +441,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
 
       if (editItem) {
         console.log('🎬 Updating existing physical item:', editItem.id);
+        
         // Update existing physical item (physical fields only)
         await apiService.updatePhysicalItem(editItem.id, {
           name: finalName,
@@ -448,7 +452,8 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
           store_links: storeLinks,
-          primary_series_id: formData.primary_series_id,
+          sort_series_id: formData.sort_series_id,
+          media_primary_series_id: formData.media_primary_series_id,
         });
 
         // Handle media links for existing physical items
@@ -547,13 +552,14 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
           store_links: storeLinks,
-          primary_series_id: formData.primary_series_id,
+          sort_series_id: formData.sort_series_id,
+          media_primary_series_id: formData.media_primary_series_id,
           media: mediaArray,
         });
       }
       onSuccess();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save physical item:', error);
       alert('Failed to save physical item. Please try again.');
     } finally {
@@ -777,18 +783,15 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
                     />
                   </div>
 
-                  {/* Primary Series */}
+                  {/* Primary Series - adds movies to series */}
                   {availableSeries.length > 0 && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Primary Series
-                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                          (Optional - for items with multiple series)
-                        </span>
                       </label>
                       <select
-                        value={formData.primary_series_id || ''}
-                        onChange={(e) => setFormData({ ...formData, primary_series_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                        value={formData.media_primary_series_id || ''}
+                        onChange={(e) => setFormData({ ...formData, media_primary_series_id: e.target.value ? parseInt(e.target.value) : undefined })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
                       >
                         <option value="">None</option>
@@ -798,6 +801,36 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
                           </option>
                         ))}
                       </select>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Setting this will add all movies in this item to the selected series and set it as their primary series.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Sort Series - for sorting preference */}
+                  {availableSeries.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Sort Series
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                          (Optional)
+                        </span>
+                      </label>
+                      <select
+                        value={formData.sort_series_id || ''}
+                        onChange={(e) => setFormData({ ...formData, sort_series_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      >
+                        <option value="">None</option>
+                        {availableSeries.map(series => (
+                          <option key={series.id} value={series.id}>
+                            {series.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Used for sorting when you sort your collection by series. Useful for multi-movie items.
+                      </p>
                     </div>
                   )}
 

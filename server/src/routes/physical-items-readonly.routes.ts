@@ -13,7 +13,8 @@ interface PhysicalItemWithMedia {
   custom_image_url?: string;
   purchase_date?: string;
   store_links?: string | any[];
-  primary_series_id?: number | null;
+  primary_series_id?: number | null; // Legacy - still used but being phased out
+  sort_series_id?: number | null; // Used for sorting by series
   created_at?: string;
   updated_at?: string;
   media: Array<{
@@ -332,9 +333,9 @@ router.get('/', async (req: Request, res: Response) => {
     let mediaSeriesMap = new Map<number, any[]>(); // media_id -> array of {series_id, sort_order}
     
     if (isSeriesSort && itemIds.length > 0) {
-      // Fetch series data for physical items (via primary_series_id)
+      // Fetch series data for physical items (via sort_series_id, falling back to primary_series_id for legacy)
       const physicalItemSeriesIds = physicalItems
-        .map(item => item.primary_series_id)
+        .map(item => item.sort_series_id || item.primary_series_id)
         .filter(id => id !== null && id !== undefined) as number[];
       
       // Also get series IDs from media's primary_series_id or movie_series associations
@@ -453,9 +454,10 @@ router.get('/', async (req: Request, res: Response) => {
       physicalItemsWithMedia.sort((a, b) => {
         // Determine primary series for each item
         const getPrimarySeries = (item: PhysicalItemWithMedia) => {
-          // First check physical item's primary_series_id
-          if (item.primary_series_id) {
-            return seriesMap.get(item.primary_series_id);
+          // First check physical item's sort_series_id (or legacy primary_series_id)
+          const sortSeriesId = item.sort_series_id || item.primary_series_id;
+          if (sortSeriesId) {
+            return seriesMap.get(sortSeriesId);
           }
           
           // Otherwise, check if any media has a primary_series_id or series association
