@@ -66,6 +66,17 @@ function escapeCSV(value: any): string {
 }
 
 /**
+ * Helper function to normalize and check CSV truthy values
+ */
+function isCsvTruthy(value: unknown): boolean {
+  const TRUTHY_VALUES = ['true', '1', true, 1];
+  if (typeof value === 'string') {
+    return TRUTHY_VALUES.includes(value.toLowerCase());
+  }
+  return TRUTHY_VALUES.includes(value as any);
+}
+
+/**
  * Helper function to parse CSV line
  */
 function parseCSVLine(line: string): string[] {
@@ -643,8 +654,7 @@ router.post('/import', authMiddleware, async (req: Request, res: Response) => {
             // Create new physical item
             // Parse notes_public - accept 'true', '1', true, or 1 as true values
             const notesPublicValue = movies[0].notes_public;
-            const isNotesPublic = notesPublicValue === 'true' || notesPublicValue === '1' || 
-                                  notesPublicValue === true || notesPublicValue === 1;
+            const isNotesPublic = isCsvTruthy(notesPublicValue);
             
             const physicalItemData = {
               name: itemName,
