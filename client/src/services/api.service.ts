@@ -16,6 +16,15 @@ import {
   BulkPhysicalItemDto,
   BulkCreatePhysicalItemsResponse,
   CollectionStatistics,
+  PhysicalLibrary,
+  ShelfGroup,
+  Shelf,
+  ShelfPlacement,
+  CreateShelfGroupDto,
+  UpdateShelfGroupDto,
+  CreateShelfDto,
+  UpdateShelfDto,
+  ApplySortPreview,
 } from '../types';
 
 class ApiService {
@@ -359,6 +368,119 @@ class ApiService {
 
   async getBulkMetadataStatus(jobId: string): Promise<any> {
     const response = await this.api.get(`/media/bulk-metadata/${jobId}`);
+    return response.data;
+  }
+
+  // =============================================
+  // Physical Library methods
+  // =============================================
+
+  async getLibrary(): Promise<PhysicalLibrary> {
+    const response = await this.api.get<PhysicalLibrary>('/library');
+    return response.data;
+  }
+
+  async updateLibrary(data: { name?: string; display_name?: string }): Promise<PhysicalLibrary> {
+    const response = await this.api.put<PhysicalLibrary>('/library', data);
+    return response.data;
+  }
+
+  // Shelf Groups
+  async getShelfGroups(): Promise<ShelfGroup[]> {
+    const response = await this.api.get<ShelfGroup[]>('/library/groups');
+    return response.data;
+  }
+
+  async createShelfGroup(data: CreateShelfGroupDto): Promise<ShelfGroup> {
+    const response = await this.api.post<ShelfGroup>('/library/groups', data);
+    return response.data;
+  }
+
+  async updateShelfGroup(id: number, data: UpdateShelfGroupDto): Promise<ShelfGroup> {
+    const response = await this.api.put<ShelfGroup>(`/library/groups/${id}`, data);
+    return response.data;
+  }
+
+  async deleteShelfGroup(id: number): Promise<void> {
+    await this.api.delete(`/library/groups/${id}`);
+  }
+
+  async reorderShelfGroups(order: Array<{ id: number; sort_order: number }>): Promise<void> {
+    await this.api.put('/library/groups/reorder', { order });
+  }
+
+  // Shelves
+  async getShelvesInGroup(groupId: number): Promise<Shelf[]> {
+    const response = await this.api.get<Shelf[]>(`/library/groups/${groupId}/shelves`);
+    return response.data;
+  }
+
+  async createShelf(groupId: number, data: CreateShelfDto): Promise<Shelf> {
+    const response = await this.api.post<Shelf>(`/library/groups/${groupId}/shelves`, data);
+    return response.data;
+  }
+
+  async updateShelf(id: number, data: UpdateShelfDto): Promise<Shelf> {
+    const response = await this.api.put<Shelf>(`/library/shelves/${id}`, data);
+    return response.data;
+  }
+
+  async deleteShelf(id: number): Promise<void> {
+    await this.api.delete(`/library/shelves/${id}`);
+  }
+
+  async reorderShelves(order: Array<{ id: number; sort_order: number; group_id?: number }>): Promise<void> {
+    await this.api.put('/library/shelves/reorder', { order });
+  }
+
+  // Shelf Placements
+  async getUnassignedItems(search?: string): Promise<PhysicalItem[]> {
+    const params: any = {};
+    if (search) params.search = search;
+    const response = await this.api.get<PhysicalItem[]>('/library/unassigned', { params });
+    return response.data;
+  }
+
+  async placeItemOnShelf(shelfId: number, physicalItemId: number, position?: number): Promise<ShelfPlacement> {
+    const response = await this.api.post<ShelfPlacement>(`/library/shelves/${shelfId}/items`, {
+      physical_item_id: physicalItemId,
+      position,
+    });
+    return response.data;
+  }
+
+  async reorderShelfItems(shelfId: number, order: Array<{ physical_item_id: number; position: number }>): Promise<void> {
+    await this.api.put(`/library/shelves/${shelfId}/items/reorder`, { order });
+  }
+
+  async removePlacement(placementId: number): Promise<void> {
+    await this.api.delete(`/library/placements/${placementId}`);
+  }
+
+  // Apply Sort
+  async previewApplySort(sortBy: string, sortOrder: string): Promise<ApplySortPreview> {
+    const response = await this.api.post<ApplySortPreview>('/library/apply-sort', {
+      sort_by: sortBy,
+      sort_order: sortOrder,
+    });
+    return response.data;
+  }
+
+  async confirmApplySort(placements: Array<{ shelf_id: number; items: Array<{ physical_item_id: number; position: number }> }>): Promise<PhysicalLibrary> {
+    const response = await this.api.post<PhysicalLibrary>('/library/apply-sort/confirm', { placements });
+    return response.data;
+  }
+
+  // Spine Colors
+  async updateSpineColors(physicalItemId: number, data: {
+    spine_color?: string | null;
+    spine_color_accent?: string | null;
+    auto_detect?: boolean;
+  }): Promise<{ spine_color: string; spine_color_accent: string }> {
+    const response = await this.api.patch<{ spine_color: string; spine_color_accent: string }>(
+      `/physical-items/${physicalItemId}/spine-colors`,
+      data
+    );
     return response.data;
   }
 }

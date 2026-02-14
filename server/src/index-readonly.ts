@@ -12,6 +12,7 @@ import settingsReadOnlyRoutes from './routes/settings-readonly.routes';
 import seriesReadOnlyRoutes from './routes/series-readonly.routes';
 import importExportReadOnlyRoutes from './routes/import-export-readonly.routes';
 import statisticsRoutes from './routes/statistics.routes';
+import libraryReadOnlyRoutes from './routes/library-readonly.routes';
 
 // Load environment variables
 dotenv.config();
@@ -77,6 +78,7 @@ app.use('/api/settings', settingsReadOnlyRoutes);
 app.use('/api/series', seriesReadOnlyRoutes);
 app.use('/api/import-export', importExportReadOnlyRoutes);
 app.use('/api/statistics', statisticsRoutes);
+app.use('/api/library', libraryReadOnlyRoutes);
 
 // Serve static frontend files (React build)
 // This must come AFTER API routes so API routes take precedence

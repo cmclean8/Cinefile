@@ -50,6 +50,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
     notes_public: false,
     custom_image_url: '',
     purchase_date: '',
+    thickness_units: 1,
     media_primary_series_id: undefined as number | undefined, // Adds movies to series
     sort_series_id: undefined as number | undefined, // Used for sorting
   });
@@ -80,6 +81,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         notes_public: editItem.notes_public || false,
         custom_image_url: editItem.custom_image_url || '',
         purchase_date: editItem.purchase_date || '',
+        thickness_units: editItem.thickness_units || 1,
         media_primary_series_id: undefined, // Don't pre-fill - this is an action, not stored state
         sort_series_id: editItem.sort_series_id || editItem.primary_series_id, // Fallback to legacy
       });
@@ -140,6 +142,7 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
         notes_public: false,
         custom_image_url: '',
         purchase_date: '',
+        thickness_units: 1,
         media_primary_series_id: undefined,
         sort_series_id: undefined,
       });
@@ -451,10 +454,11 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           notes_public: formData.notes_public,
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
+          thickness_units: formData.thickness_units,
           store_links: storeLinks,
           sort_series_id: formData.sort_series_id,
           media_primary_series_id: formData.media_primary_series_id,
-        });
+        } as any);
 
         // Handle media links for existing physical items
         // Get list of currently linked media IDs
@@ -551,11 +555,12 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
           notes_public: formData.notes_public,
           custom_image_url: formData.custom_image_url,
           purchase_date: formData.purchase_date,
+          thickness_units: formData.thickness_units,
           store_links: storeLinks,
           sort_series_id: formData.sort_series_id,
           media_primary_series_id: formData.media_primary_series_id,
           media: mediaArray,
-        });
+        } as any);
       }
       onSuccess();
       onClose();
@@ -781,6 +786,38 @@ const MediaForm: React.FC<MediaFormProps> = ({ isOpen, onClose, onSuccess, editI
                       onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
+                  </div>
+
+                  {/* Case Thickness */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Case Thickness (standard cases)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, thickness_units: Math.max(1, formData.thickness_units - 1) })}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        -
+                      </button>
+                      <span className="w-12 text-center text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {formData.thickness_units}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, thickness_units: formData.thickness_units + 1 })}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        +
+                      </button>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
+                        = {(formData.thickness_units * 12.5).toFixed(1)}mm
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Most standard Blu-rays = 1. Box sets may be 2-4+.
+                    </p>
                   </div>
 
                   {/* Primary Series - adds movies to series */}

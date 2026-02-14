@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../database';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { calculateSortName } from '../utils/sort-name.util';
+import { extractSpineColors } from '../services/color.service';
 
 const router = Router();
 
@@ -319,6 +320,32 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Get all physical item IDs for batch fetching media
     const itemIds = physicalItems.map(item => item.id);
+
+    // Fetch shelf placements for all items (for showing location info)
+    const allPlacements = itemIds.length > 0 ? await db('shelf_placements')
+      .leftJoin('shelves', 'shelf_placements.shelf_id', 'shelves.id')
+      .leftJoin('shelf_groups', 'shelves.group_id', 'shelf_groups.id')
+      .whereIn('shelf_placements.physical_item_id', itemIds)
+      .select(
+        'shelf_placements.id',
+        'shelf_placements.shelf_id',
+        'shelf_placements.physical_item_id',
+        'shelf_placements.position',
+        'shelves.display_name as shelf_display_name',
+        'shelf_groups.display_name as group_display_name'
+      ) : [];
+
+    const placementByItemId = new Map<number, any>();
+    allPlacements.forEach((p: any) => {
+      placementByItemId.set(p.physical_item_id, {
+        id: p.id,
+        shelf_id: p.shelf_id,
+        physical_item_id: p.physical_item_id,
+        position: p.position,
+        shelf_display_name: p.shelf_display_name,
+        group_display_name: p.group_display_name,
+      });
+    });
     
     // Fetch all linked media for all physical items in a single query (eliminates N+1 problem)
     const allLinkedMedia = itemIds.length > 0 ? await db('physical_item_media')
@@ -409,6 +436,28 @@ router.get('/', async (req: Request, res: Response) => {
       });
     }
 
+    // Fetch series data for all media items (for display in detail modal)
+    const allMediaIds = allLinkedMedia.map(m => m.id);
+    let allMediaSeriesAssociations: any[] = [];
+    let allSeriesData = new Map<number, any>();
+    
+    if (allMediaIds.length > 0) {
+      allMediaSeriesAssociations = await db('movie_series')
+        .whereIn('media_id', allMediaIds)
+        .select('media_id', 'series_id', 'sort_order');
+      
+      const allSeriesIdsForDisplay = new Set<number>();
+      allMediaSeriesAssociations.forEach(assoc => allSeriesIdsForDisplay.add(assoc.series_id));
+      
+      if (allSeriesIdsForDisplay.size > 0) {
+        const seriesRows = await db('series')
+          .whereIn('id', Array.from(allSeriesIdsForDisplay))
+          .select('id', 'name', 'sort_name');
+        
+        seriesRows.forEach(s => allSeriesData.set(s.id, s));
+      }
+    }
+
     // Group media by physical_item_id for efficient lookup
     const mediaByItemId = new Map<number, any[]>();
     allLinkedMedia.forEach((mediaItem: any) => {
@@ -424,25 +473,36 @@ router.get('/', async (req: Request, res: Response) => {
       const linkedMedia = mediaByItemId.get(item.id) || [];
       
       // Parse JSON fields
-      const media = linkedMedia.map(m => ({
-        id: m.id,
-        title: m.title,
-        tmdb_id: m.tmdb_id,
-        synopsis: m.synopsis,
-        cover_art_url: m.cover_art_url,
-        release_date: m.release_date,
-        director: m.director,
-        disc_number: m.disc_number,
-        formats: m.formats ? (typeof m.formats === 'string' ? JSON.parse(m.formats) : m.formats) : [],
-        cast: m.cast ? (typeof m.cast === 'string' ? JSON.parse(m.cast) : m.cast) : [],
-        genres: m.genres ? (typeof m.genres === 'string' ? JSON.parse(m.genres) : m.genres) : [],
-      }));
+      const media = linkedMedia.map(m => {
+        // Get series for this media item
+        const mediaSeries = allMediaSeriesAssociations
+          .filter(assoc => assoc.media_id === m.id)
+          .map(assoc => allSeriesData.get(assoc.series_id))
+          .filter(Boolean);
+        
+        return {
+          id: m.id,
+          title: m.title,
+          tmdb_id: m.tmdb_id,
+          synopsis: m.synopsis,
+          cover_art_url: m.cover_art_url,
+          release_date: m.release_date,
+          director: m.director,
+          disc_number: m.disc_number,
+          formats: m.formats ? (typeof m.formats === 'string' ? JSON.parse(m.formats) : m.formats) : [],
+          cast: m.cast ? (typeof m.cast === 'string' ? JSON.parse(m.cast) : m.cast) : [],
+          genres: m.genres ? (typeof m.genres === 'string' ? JSON.parse(m.genres) : m.genres) : [],
+          series: mediaSeries.length > 0 ? mediaSeries : undefined,
+        };
+      });
 
       // Clean up the aggregated fields from the main query
       const cleanedItem = {
         ...item,
         physical_format: item.physical_format ? (typeof item.physical_format === 'string' ? JSON.parse(item.physical_format) : item.physical_format) : [],
         store_links: item.store_links ? (typeof item.store_links === 'string' ? JSON.parse(item.store_links) : item.store_links) : [],
+        thickness_units: item.thickness_units || 1,
+        shelf_placement: placementByItemId.get(item.id) || null,
         media,
       };
 
@@ -624,18 +684,65 @@ router.get('/:id', async (req: Request, res: Response) => {
         'physical_item_media.formats'
       );
 
+    // Get shelf placement
+    const placement = await db('shelf_placements')
+      .leftJoin('shelves', 'shelf_placements.shelf_id', 'shelves.id')
+      .leftJoin('shelf_groups', 'shelves.group_id', 'shelf_groups.id')
+      .where('shelf_placements.physical_item_id', id)
+      .select(
+        'shelf_placements.id',
+        'shelf_placements.shelf_id',
+        'shelf_placements.physical_item_id',
+        'shelf_placements.position',
+        'shelves.display_name as shelf_display_name',
+        'shelf_groups.display_name as group_display_name'
+      )
+      .first();
+
+    // Fetch series data for linked media
+    const mediaIds = linkedMedia.map(m => m.id);
+    let mediaSeriesAssociations: any[] = [];
+    const seriesDataMap = new Map<number, any>();
+    
+    if (mediaIds.length > 0) {
+      mediaSeriesAssociations = await db('movie_series')
+        .whereIn('media_id', mediaIds)
+        .select('media_id', 'series_id', 'sort_order');
+      
+      const seriesIds = new Set<number>();
+      mediaSeriesAssociations.forEach(assoc => seriesIds.add(assoc.series_id));
+      
+      if (seriesIds.size > 0) {
+        const seriesRows = await db('series')
+          .whereIn('id', Array.from(seriesIds))
+          .select('id', 'name', 'sort_name');
+        
+        seriesRows.forEach(s => seriesDataMap.set(s.id, s));
+      }
+    }
+
     // Parse JSON fields
-    const media = linkedMedia.map(m => ({
-      ...m,
-      cast: m.cast ? JSON.parse(m.cast) : [],
-      genres: m.genres ? JSON.parse(m.genres) : [],
-      formats: m.formats ? JSON.parse(m.formats) : [],
-    }));
+    const media = linkedMedia.map(m => {
+      const mediaSeries = mediaSeriesAssociations
+        .filter(assoc => assoc.media_id === m.id)
+        .map(assoc => seriesDataMap.get(assoc.series_id))
+        .filter(Boolean);
+      
+      return {
+        ...m,
+        cast: m.cast ? JSON.parse(m.cast) : [],
+        genres: m.genres ? JSON.parse(m.genres) : [],
+        formats: m.formats ? JSON.parse(m.formats) : [],
+        series: mediaSeries.length > 0 ? mediaSeries : undefined,
+      };
+    });
 
     const result: PhysicalItemWithMedia = {
       ...physicalItem,
       physical_format: JSON.parse(physicalItem.physical_format),
       store_links: physicalItem.store_links ? JSON.parse(physicalItem.store_links) : [],
+      thickness_units: physicalItem.thickness_units || 1,
+      shelf_placement: placement || null,
       media,
     };
 
@@ -655,6 +762,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     const { 
       name, edition_notes, notes, notes_public, custom_image_url, purchase_date, 
       media, store_links, sort_name,
+      thickness_units, width_mm, height_mm, depth_mm,
       sort_series_id, // Used for sorting preference
       media_primary_series_id // When set, adds all media to this series and sets it as their primary
     } = req.body;
@@ -738,6 +846,10 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         notes_public: notes_public === true ? 1 : 0, // SQLite boolean
         custom_image_url,
         purchase_date,
+        thickness_units: Math.max(1, parseInt(thickness_units) || 1),
+        width_mm: width_mm || null,
+        height_mm: height_mm || null,
+        depth_mm: depth_mm || null,
         store_links: store_links ? JSON.stringify(store_links) : null,
         sort_series_id: sort_series_id || null,
       };
@@ -857,6 +969,23 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       };
     });
 
+    // Fire-and-forget: extract spine colors from cover art if not set
+    if (!result.spine_color) {
+      const coverUrl = result.custom_image_url || result.media?.[0]?.cover_art_url;
+      if (coverUrl) {
+        extractSpineColors(coverUrl, result.name).then(async (colors) => {
+          try {
+            await db('physical_items').where('id', result.id).update({
+              spine_color: colors.dominant,
+              spine_color_accent: colors.accent,
+            });
+          } catch (e) {
+            console.warn('Failed to save extracted spine colors:', e);
+          }
+        }).catch(() => { /* silently ignore */ });
+      }
+    }
+
     res.status(201).json(result);
   } catch (error) {
     console.error('Error creating physical item:', error);
@@ -874,6 +1003,7 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
     const { 
       name, physical_format, edition_notes, notes, notes_public, 
       custom_image_url, purchase_date, store_links, sort_name,
+      thickness_units, width_mm, height_mm, depth_mm,
       sort_series_id, // Used for sorting preference
       media_primary_series_id // When set, adds all media to this series and sets it as their primary
     } = req.body;
@@ -948,6 +1078,10 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
     if (notes_public !== undefined) updateData.notes_public = notes_public === true ? 1 : 0; // SQLite boolean
     if (custom_image_url !== undefined) updateData.custom_image_url = custom_image_url;
     if (purchase_date !== undefined) updateData.purchase_date = purchase_date;
+    if (thickness_units !== undefined) updateData.thickness_units = Math.max(1, parseInt(thickness_units) || 1);
+    if (width_mm !== undefined) updateData.width_mm = width_mm || null;
+    if (height_mm !== undefined) updateData.height_mm = height_mm || null;
+    if (depth_mm !== undefined) updateData.depth_mm = depth_mm || null;
     if (sort_series_id !== undefined) updateData.sort_series_id = sort_series_id || null;
     
     // Handle sort_name: if explicitly provided, use it; otherwise recalculate if name changed
@@ -1490,6 +1624,63 @@ router.put('/:id/media/:mediaId/formats', authMiddleware, async (req: Request, r
   } catch (error) {
     console.error('Error updating movie formats:', error);
     res.status(500).json({ error: 'Failed to update movie formats' });
+  }
+});
+
+/**
+ * PATCH /api/physical-items/:id/spine-colors
+ * Update spine colors for a physical item (protected)
+ */
+router.patch('/:id/spine-colors', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { spine_color, spine_color_accent, auto_detect } = req.body;
+
+    const existingItem = await db('physical_items').where('id', id).first();
+    if (!existingItem) {
+      return res.status(404).json({ error: 'Physical item not found' });
+    }
+
+    if (auto_detect) {
+      // Auto-detect colors from cover art
+      const linkedMedia = await db('physical_item_media')
+        .join('media', 'physical_item_media.media_id', 'media.id')
+        .where('physical_item_media.physical_item_id', id)
+        .select('media.cover_art_url')
+        .orderBy('physical_item_media.disc_number', 'asc')
+        .first();
+
+      const coverUrl = existingItem.custom_image_url || linkedMedia?.cover_art_url;
+      if (coverUrl) {
+        const colors = await extractSpineColors(coverUrl, existingItem.name);
+        await db('physical_items').where('id', id).update({
+          spine_color: colors.dominant,
+          spine_color_accent: colors.accent,
+        });
+        const updated = await db('physical_items').where('id', id).first();
+        return res.json({
+          spine_color: updated.spine_color,
+          spine_color_accent: updated.spine_color_accent,
+        });
+      } else {
+        return res.status(400).json({ error: 'No cover art available for color detection' });
+      }
+    }
+
+    // Manual color override
+    const updateData: any = {};
+    if (spine_color !== undefined) updateData.spine_color = spine_color || null;
+    if (spine_color_accent !== undefined) updateData.spine_color_accent = spine_color_accent || null;
+
+    await db('physical_items').where('id', id).update(updateData);
+    const updated = await db('physical_items').where('id', id).first();
+    res.json({
+      spine_color: updated.spine_color,
+      spine_color_accent: updated.spine_color_accent,
+    });
+  } catch (error) {
+    console.error('Error updating spine colors:', error);
+    res.status(500).json({ error: 'Failed to update spine colors' });
   }
 });
 

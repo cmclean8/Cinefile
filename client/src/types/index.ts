@@ -84,6 +84,16 @@ export interface PhysicalItem {
   store_links?: Array<{label: string; url: string}>;
   primary_series_id?: number; // Legacy - still present but being phased out
   sort_series_id?: number; // Used for sorting by series
+  // Physical dimensions
+  thickness_units: number; // How many standard cases thick (default 1)
+  width_mm?: number;       // Optional precise width override
+  height_mm?: number;      // Optional precise height override
+  depth_mm?: number;       // Optional precise depth override
+  // Spine display colors
+  spine_color?: string;        // Dominant color for spine display (e.g. '#1a3c5e')
+  spine_color_accent?: string; // Text/accent color for spine display (e.g. '#e8d4a0')
+  // Shelf placement info (populated when fetching)
+  shelf_placement?: ShelfPlacement;
   created_at?: string;
   updated_at?: string;
   media: Media[]; // Linked media entries
@@ -253,3 +263,103 @@ export interface CollectionStatistics {
   formatCounts: Record<string, number>;
 }
 
+// =============================================
+// Physical Library types
+// =============================================
+
+/** Standard Blu-ray case width in millimeters. 1 unit = 12.5mm */
+export const STANDARD_UNIT_MM = 12.5;
+
+export interface PhysicalLibrary {
+  id: number;
+  name: string;
+  display_name: string;
+  groups: ShelfGroup[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ShelfGroup {
+  id: number;
+  library_id: number;
+  name: string;
+  display_name: string;
+  sort_order: number;
+  shelves: Shelf[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Shelf {
+  id: number;
+  group_id: number;
+  name: string;
+  display_name: string;
+  capacity_units: number;
+  width_mm?: number;
+  depth_mm?: number;
+  sort_order: number;
+  placements: ShelfPlacement[];
+  used_units: number; // computed: sum of placed item thickness_units
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ShelfPlacement {
+  id: number;
+  shelf_id: number;
+  physical_item_id: number;
+  position: number;
+  physical_item?: PhysicalItem; // populated when fetching
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateShelfGroupDto {
+  name: string;
+  display_name: string;
+}
+
+export interface UpdateShelfGroupDto {
+  name?: string;
+  display_name?: string;
+  sort_order?: number;
+}
+
+export interface CreateShelfDto {
+  name: string;
+  display_name: string;
+  capacity_units: number;
+  width_mm?: number;
+  depth_mm?: number;
+}
+
+export interface UpdateShelfDto {
+  name?: string;
+  display_name?: string;
+  capacity_units?: number;
+  width_mm?: number;
+  depth_mm?: number;
+  sort_order?: number;
+}
+
+export interface ApplySortPreview {
+  placements: Array<{
+    shelf_id: number;
+    shelf_display_name: string;
+    items: Array<{
+      physical_item_id: number;
+      physical_item_name: string;
+      position: number;
+      thickness_units: number;
+    }>;
+    used_units: number;
+    capacity_units: number;
+    overflow: boolean;
+  }>;
+  unplaceable: Array<{
+    physical_item_id: number;
+    physical_item_name: string;
+    thickness_units: number;
+  }>;
+}

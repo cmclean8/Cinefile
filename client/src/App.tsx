@@ -8,6 +8,7 @@ import AboutPage from './pages/AboutPage';
 import AdminPage from './pages/AdminPage';
 import CollectionPage from './pages/CollectionPage';
 import MoviesPage from './pages/MoviesPage';
+import PhysicalLibraryPage from './pages/PhysicalLibraryPage';
 import Navigation from './components/Navigation';
 import DynamicFavicon from './components/DynamicFavicon';
 
@@ -36,6 +37,7 @@ const AppContent: React.FC = () => {
       }`}>
         <Routes>
           <Route path="/" element={<CollectionPage />} />
+          <Route path="/library" element={<PhysicalLibraryPage />} />
           <Route path="/about" element={<AboutPage />} />
           {isReadOnly ? (
             // In read-only mode, redirect admin routes to home

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PhysicalItem, PhysicalFormat, SortField, SortOrder, CollectionStatistics as Stats } from '../types';
 import { apiService } from '../services/api.service';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +15,7 @@ const SESSION_SORT_BY_KEY = 'collection_sort_by';
 const SESSION_SORT_ORDER_KEY = 'collection_sort_order';
 
 const CollectionPage: React.FC = () => {
+  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { isReadOnly } = useServerMode();
   
@@ -435,6 +437,21 @@ const CollectionPage: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{collectionTitle}</h1>
+          {/* View toggle */}
+          <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+            <button
+              className="px-3 py-1.5 text-sm font-medium rounded-md bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm"
+              disabled
+            >
+              Virtual
+            </button>
+            <button
+              onClick={() => navigate('/library')}
+              className="px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+            >
+              Physical
+            </button>
+          </div>
         </div>
       </div>
 
