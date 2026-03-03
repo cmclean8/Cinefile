@@ -69,6 +69,34 @@ const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ physicalItem, isOpe
                     </div>
                   )}
 
+                  {/* Case Thickness */}
+                  {physicalItem.thickness_units && physicalItem.thickness_units > 1 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Case Thickness</h3>
+                      <p className="text-gray-900 dark:text-gray-100">
+                        {physicalItem.thickness_units} standard cases ({(physicalItem.thickness_units * 12.5).toFixed(1)}mm)
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Shelf Location */}
+                  {physicalItem.shelf_placement && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Shelf Location</h3>
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                        <p className="text-gray-900 dark:text-gray-100">
+                          {(physicalItem.shelf_placement as any).group_display_name && (
+                            <span>{(physicalItem.shelf_placement as any).group_display_name} &rsaquo; </span>
+                          )}
+                          {(physicalItem.shelf_placement as any).shelf_display_name || 'Shelf'}, Position {physicalItem.shelf_placement.position + 1}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Sort Name */}
                   {physicalItem.sort_name && (
                     <div>
@@ -158,6 +186,23 @@ const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ physicalItem, isOpe
                           </p>
                         )}
                       </div>
+
+                      {/* Series */}
+                      {physicalItem.media[0].series && physicalItem.media[0].series.length > 0 && (
+                        <div>
+                          <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Series</h5>
+                          <div className="flex flex-wrap gap-2">
+                            {physicalItem.media[0].series.map((s) => (
+                              <span
+                                key={s.id}
+                                className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded"
+                              >
+                                {s.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Genres */}
                       {physicalItem.media[0].genres && physicalItem.media[0].genres.length > 0 && (
@@ -253,6 +298,23 @@ const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ physicalItem, isOpe
                                   </p>
                                 )}
                               </div>
+
+                              {/* Series */}
+                              {movie.series && movie.series.length > 0 && (
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Series</h5>
+                                  <div className="flex flex-wrap gap-2">
+                                    {movie.series.map((s) => (
+                                      <span
+                                        key={s.id}
+                                        className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded"
+                                      >
+                                        {s.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
 
                               {/* Genres */}
                               {movie.genres && movie.genres.length > 0 && (

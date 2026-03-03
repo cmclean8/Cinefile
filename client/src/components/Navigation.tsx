@@ -149,6 +149,22 @@ const Navigation: React.FC = () => {
               {!isCollapsed && <span>Collection</span>}
             </Link>
 
+            <Link
+              to="/library"
+              onClick={closeMobileMenu}
+              className={`flex items-center gap-3 px-2 py-2 rounded-lg transition-colors ${
+                isActive('/library')
+                  ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 font-semibold'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              } ${isCollapsed ? 'justify-center' : ''}`}
+              title={isCollapsed ? 'Physical Library' : undefined}
+            >
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              {!isCollapsed && <span>Physical Library</span>}
+            </Link>
+
             {!isReadOnly && (
               <Link
                 to="/admin"
@@ -210,6 +226,7 @@ const Navigation: React.FC = () => {
             {/* Page Title - could be dynamic based on route */}
             <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {location.pathname === '/' && 'Collection'}
+              {location.pathname === '/library' && 'Physical Library'}
               {!isReadOnly && location.pathname === '/movies' && 'Movies'}
               {!isReadOnly && location.pathname === '/admin' && 'Settings'}
               {location.pathname === '/about' && 'About'}
