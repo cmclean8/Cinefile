@@ -1,19 +1,19 @@
-import express from "express";
-import cors from "cors";
-import "dotenv/config";
-import path from "path";
-import { setupDatabase } from "./database";
+import express from 'express';
+import cors from 'cors';
+import 'dotenv/config';
+import path from 'path';
+import { setupDatabase } from './database';
 
 // Import routes
-import authRoutes from "./routes/auth.routes";
-import mediaRoutes from "./routes/media.routes";
-import physicalItemsRoutes from "./routes/physical-items.routes";
-import settingsRoutes from "./routes/settings.routes";
-import searchRoutes from "./routes/search.routes";
-import seriesRoutes from "./routes/series.routes";
-import importExportRoutes from "./routes/import-export.routes";
-import statisticsRoutes from "./routes/statistics.routes";
-import libraryRoutes from "./routes/library.routes";
+import authRoutes from './routes/auth.routes';
+import mediaRoutes from './routes/media.routes';
+import physicalItemsRoutes from './routes/physical-items.routes';
+import settingsRoutes from './routes/settings.routes';
+import searchRoutes from './routes/search.routes';
+import seriesRoutes from './routes/series.routes';
+import importExportRoutes from './routes/import-export.routes';
+import statisticsRoutes from './routes/statistics.routes';
+import libraryRoutes from './routes/library.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,41 +27,41 @@ app.use(express.urlencoded({ extended: true }));
 setupDatabase();
 
 // Serve uploaded files statically (must be before API routes for proper handling)
-const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, "../uploads");
-app.use("/uploads", express.static(uploadDir));
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadDir));
 
 // API Routes
-app.get("/api", (req, res) => {
-  res.json({ message: "Hello World from Cinefile API!" });
+app.get('/api', (req, res) => {
+  res.json({ message: 'Hello World from Cinefile API!' });
 });
 
-app.get("/api/health", (req, res) => {
+app.get('/api/health', (req, res) => {
   res.json({
-    status: "healthy",
+    status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: "1.0.0",
+    version: '1.0.0',
   });
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/media", mediaRoutes);
-app.use("/api/physical-items", physicalItemsRoutes);
-app.use("/api/settings", settingsRoutes);
-app.use("/api/search", searchRoutes);
-app.use("/api/series", seriesRoutes);
-app.use("/api/import-export", importExportRoutes);
-app.use("/api/statistics", statisticsRoutes);
-app.use("/api/library", libraryRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/media', mediaRoutes);
+app.use('/api/physical-items', physicalItemsRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/series', seriesRoutes);
+app.use('/api/import-export', importExportRoutes);
+app.use('/api/statistics', statisticsRoutes);
+app.use('/api/library', libraryRoutes);
 
 // Serve static frontend files (React build)
 // This must come AFTER API routes so API routes take precedence
-const publicDir = path.join(__dirname, "../public");
+const publicDir = path.join(__dirname, '../public');
 app.use(express.static(publicDir));
 
 // SPA fallback - serve index.html for all other routes
 // This handles client-side routing for React Router
-app.get("*", (req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 // Start server
